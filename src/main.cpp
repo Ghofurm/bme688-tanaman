@@ -15,6 +15,7 @@ FirebaseAuth auth;
 unsigned long lastSendTime = 0;
 const unsigned long sendInterval = 15000; // Interval pengiriman/pengecekan data 15 detik
 bool isSensorInitialized = false;          // Flag inisialisasi sensor
+String targetTanamanID = "";               // ID Tanaman target yang didapat dinamis dari Firebase
 
 // Fungsi untuk menghubungkan ke WiFi dengan auto-reconnect
 void connectWiFi()
@@ -76,6 +77,12 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
     return;
   }
 
+  if (targetTanamanID == "")
+  {
+    Serial.println("[Firebase] Gagal mengirim, ID tanaman target belum diset.");
+    return;
+  }
+
   FirebaseJson json;
   json.set("temperatur", temp);
   json.set("kelembapan", hum);
@@ -84,7 +91,7 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   json.set("timestamp", (int)Firebase.getCurrentTime());
 
   // 1) Update data terkini (overwrite)
-  String pathTerakhir = String("/tanaman_list/") + DEVICE_TANAMAN_ID + "/data_terakhir";
+  String pathTerakhir = String("/tanaman_list/") + targetTanamanID + "/data_terakhir";
   Serial.print("[Firebase] Mengupdate data terkini di ");
   Serial.println(pathTerakhir);
 
@@ -99,7 +106,7 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   }
 
   // 2) Simpan ke history (append)
-  String pathHistory = String("/tanaman_list/") + DEVICE_TANAMAN_ID + "/history_data";
+  String pathHistory = String("/tanaman_list/") + targetTanamanID + "/history_data";
   Serial.print("[Firebase] Menambahkan history data ke ");
   Serial.println(pathHistory);
 
@@ -141,62 +148,86 @@ void loop()
 
   unsigned long currentMillis = millis();
 
-  // Cek status keaktifan sensor dari Firebase setiap 15 detik
+  // Jalankan logika pembacaan status dan data sensor setiap 15 detik
   if (currentMillis - lastSendTime >= sendInterval)
   {
     lastSendTime = currentMillis;
 
     if (WiFi.status() == WL_CONNECTED)
     {
-      String pathStatus = String("/tanaman_list/") + DEVICE_TANAMAN_ID + "/status_sensor_aktif";
-      Serial.print("[Firebase] Mengecek status aktif sensor di ");
-      Serial.println(pathStatus);
+      // A. Ambil ID Tanaman target secara dinamis dari Firebase terlebih dahulu
+      String pathDeviceMapping = String("/devices/") + DEVICE_ID + "/target_tanaman_id";
+      Serial.print("[Firebase] Mendapatkan target tanaman dari ");
+      Serial.println(pathDeviceMapping);
 
-      if (Firebase.getInt(fbdo, pathStatus.c_str()))
+      if (Firebase.getString(fbdo, pathDeviceMapping.c_str()))
       {
-        int statusVal = fbdo.intData();
+        targetTanamanID = fbdo.stringData();
+        Serial.printf("[Firebase] Device dipetakan ke ID tanaman: %s\n", targetTanamanID.c_str());
+      }
+      else
+      {
+        Serial.print("[Firebase] Gagal mendapatkan target tanaman. Alasan: ");
+        Serial.println(fbdo.errorReason());
+      }
 
-        if (statusVal == 0)
+      // Jalankan proses sensor hanya jika targetTanamanID tidak kosong
+      if (targetTanamanID != "")
+      {
+        String pathStatus = String("/tanaman_list/") + targetTanamanID + "/status_sensor_aktif";
+        Serial.print("[Firebase] Mengecek status aktif sensor di ");
+        Serial.println(pathStatus);
+
+        if (Firebase.getInt(fbdo, pathStatus.c_str()))
         {
-          if (isSensorInitialized)
+          int statusVal = fbdo.intData();
+
+          if (statusVal == 0)
           {
-            Serial.println("Sensor dimatikan jarak jauh. Standby mode...");
-            isSensorInitialized = false;
+            if (isSensorInitialized)
+            {
+              Serial.println("Sensor dimatikan jarak jauh. Standby mode...");
+              isSensorInitialized = false;
+            }
+          }
+          else if (statusVal == 1)
+          {
+            if (!isSensorInitialized)
+            {
+              if (initializeSensor())
+              {
+                isSensorInitialized = true;
+              }
+            }
+
+            // Lakukan pembacaan data sensor & kirim jika sudah diinisialisasi
+            if (isSensorInitialized)
+            {
+              if (bme.performReading())
+              {
+                float temp = bme.temperature;
+                float hum = bme.humidity;
+                float pres = bme.pressure / 100.0;
+                float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
+
+                sendDataToFirebase(temp, hum, pres, gas);
+              }
+              else
+              {
+                Serial.println("[ERROR] Gagal membaca sensor BME688.");
+              }
+            }
           }
         }
-        else if (statusVal == 1)
+        else
         {
-          if (!isSensorInitialized)
-          {
-            if (initializeSensor())
-            {
-              isSensorInitialized = true;
-            }
-          }
-
-          // Lakukan pembacaan data sensor & kirim jika sudah diinisialisasi
-          if (isSensorInitialized)
-          {
-            if (bme.performReading())
-            {
-              float temp = bme.temperature;
-              float hum = bme.humidity;
-              float pres = bme.pressure / 100.0;
-              float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
-
-              sendDataToFirebase(temp, hum, pres, gas);
-            }
-            else
-            {
-              Serial.println("[ERROR] Gagal membaca sensor BME688.");
-            }
-          }
+          Serial.print("[Firebase] Gagal membaca status aktif. Alasan: ");
+          Serial.println(fbdo.errorReason());
         }
       }
       else
       {
-        Serial.print("[Firebase] Gagal membaca status aktif. Alasan: ");
-        Serial.println(fbdo.errorReason());
+        Serial.println("[WARN] Target tanaman kosong di Firebase. Mode Standby.");
       }
     }
   }
@@ -208,7 +239,8 @@ void loop()
     lastPrintTime = currentMillis;
 
     Serial.println("---------------------------");
-    Serial.printf("ID Tanaman    : %s\n", DEVICE_TANAMAN_ID);
+    Serial.printf("Device ID     : %s\n", DEVICE_ID);
+    Serial.printf("Target Tanaman: %s\n", (targetTanamanID == "") ? "Belum diset" : targetTanamanID.c_str());
     if (isSensorInitialized)
     {
       Serial.printf("Temperatur    : %.2f C\n", bme.temperature);
