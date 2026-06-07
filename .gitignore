@@ -2,3 +2,7 @@
 .vscode/
 __pycache__/
 *.pyc
+
+# Kredensial rahasia - jangan di-push ke GitHub
+include/secrets.h
+
