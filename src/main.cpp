@@ -81,18 +81,35 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   json.set("kelembapan", hum);
   json.set("tekanan_udara", pres);
   json.set("gas_resistance", gas);
+  json.set("timestamp", (int)Firebase.getCurrentTime());
 
-  String pathData = String("/tanaman_list/") + DEVICE_TANAMAN_ID + "/data_terakhir";
-  Serial.print("[Firebase] Mengirim data ke ");
-  Serial.println(pathData);
+  // 1) Update data terkini (overwrite)
+  String pathTerakhir = String("/tanaman_list/") + DEVICE_TANAMAN_ID + "/data_terakhir";
+  Serial.print("[Firebase] Mengupdate data terkini di ");
+  Serial.println(pathTerakhir);
 
-  if (Firebase.setJSON(fbdo, pathData.c_str(), json))
+  if (Firebase.setJSON(fbdo, pathTerakhir.c_str(), json))
   {
-    Serial.println("[Firebase] Data berhasil terkirim!");
+    Serial.println("[Firebase] Data terkini berhasil diperbarui!");
   }
   else
   {
-    Serial.print("[Firebase] Gagal terkirim. Alasan: ");
+    Serial.print("[Firebase] Gagal update data terkini. Alasan: ");
+    Serial.println(fbdo.errorReason());
+  }
+
+  // 2) Simpan ke history (append)
+  String pathHistory = String("/tanaman_list/") + DEVICE_TANAMAN_ID + "/history_data";
+  Serial.print("[Firebase] Menambahkan history data ke ");
+  Serial.println(pathHistory);
+
+  if (Firebase.pushJSON(fbdo, pathHistory.c_str(), json))
+  {
+    Serial.println("[Firebase] History data berhasil ditambahkan!");
+  }
+  else
+  {
+    Serial.print("[Firebase] Gagal push history. Alasan: ");
     Serial.println(fbdo.errorReason());
   }
 }
