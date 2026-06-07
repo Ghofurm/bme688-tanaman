@@ -61,6 +61,11 @@
         </div>
 
         <div class="mb-4">
+          <label class="block text-slate-400 text-sm font-semibold mb-2" for="device-id">ID Perangkat ESP32 (misal: esp32_sensor_01)</label>
+          <input type="text" id="device-id" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors" placeholder="esp32_sensor_01">
+        </div>
+
+        <div class="mb-4">
           <label class="block text-slate-400 text-sm font-semibold mb-2" for="plant-name">Nama Tanaman</label>
           <input type="text" id="plant-name" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors">
         </div>
@@ -115,6 +120,7 @@
     const modalTitle = document.getElementById('modal-title');
     const modalModeInput = document.getElementById('modal-mode');
     const plantIdInput = document.getElementById('plant-id');
+    const deviceIdInput = document.getElementById('device-id');
     const plantNameInput = document.getElementById('plant-name');
     const plantDescInput = document.getElementById('plant-desc');
     const plantBenchmarkInput = document.getElementById('plant-benchmark');
@@ -147,6 +153,7 @@
         const isActive = p.status_sensor_aktif === 1;
         const benchmark = parseFloat(p.benchmark_gas) || 100000;
         const gas = latest.gas_resistance !== undefined ? parseFloat(latest.gas_resistance) : -1;
+        const deviceId = p.device_id || 'esp32_sensor_01';
 
         // Tentukan status kesehatan
         let healthBadge = '';
@@ -171,7 +178,10 @@
               <div class="flex justify-between items-start gap-2 mb-2">
                 <div>
                   <h3 class="text-lg font-bold text-slate-100">${p.nama}</h3>
-                  <span class="text-xs text-slate-500 font-mono">${id}</span>
+                  <div class="flex flex-col gap-0.5 mt-0.5">
+                    <span class="text-[10px] text-slate-500 font-mono">Plant ID: ${id}</span>
+                    <span class="text-[10px] text-slate-500 font-mono">Device ID: ${deviceId}</span>
+                  </div>
                 </div>
                 ${healthBadge}
               </div>
@@ -203,7 +213,7 @@
               <!-- Sensor Active Toggle Switch -->
               <div class="flex items-center gap-2">
                 <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked)" class="sr-only peer">
+                  <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked, '${deviceId}')" class="sr-only peer">
                   <div class="w-10 h-5.5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                 </label>
                 <span class="text-xs text-slate-400 font-semibold">${isActive ? 'Aktif' : 'Mati'}</span>
@@ -211,7 +221,7 @@
 
               <!-- Edit & Delete Buttons -->
               <div class="flex gap-2">
-                <button onclick="editPlant('${id}', '${p.nama}', '${p.deskripsi || ''}', ${benchmark})" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold p-2 rounded-lg text-xs transition-colors">
+                <button onclick="editPlant('${id}', '${p.nama}', '${p.deskripsi || ''}', ${benchmark}, '${deviceId}')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold p-2 rounded-lg text-xs transition-colors">
                   Edit
                 </button>
                 <button onclick="deletePlant('${id}', '${p.nama}')" class="bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white font-semibold p-2 rounded-lg text-xs transition-colors">
@@ -226,12 +236,13 @@
     }
 
     // Modal Control
-    function openModal(mode, id = '', name = '', desc = '', benchmark = '') {
+    function openModal(mode, id = '', name = '', desc = '', benchmark = '', deviceId = 'esp32_sensor_01') {
       modalModeInput.value = mode;
       if (mode === 'add') {
         modalTitle.innerText = "Tambah Tanaman Baru";
         plantIdInput.disabled = false;
         plantIdInput.value = '';
+        deviceIdInput.value = 'esp32_sensor_01';
         plantNameInput.value = '';
         plantDescInput.value = '';
         plantBenchmarkInput.value = '100000';
@@ -239,6 +250,7 @@
         modalTitle.innerText = "Edit Tanaman";
         plantIdInput.disabled = true; // Jangan biarkan ID diubah karena referensi sensor
         plantIdInput.value = id;
+        deviceIdInput.value = deviceId;
         plantNameInput.value = name;
         plantDescInput.value = desc;
         plantBenchmarkInput.value = benchmark;
@@ -260,9 +272,26 @@
     }
 
     // Toggle Sensor Switch
-    function toggleSensor(id, checked) {
+    function toggleSensor(id, checked, deviceId) {
       const val = checked ? 1 : 0;
-      db.ref(`/tanaman_list/${id}/status_sensor_aktif`).set(val)
+      const updates = {};
+      updates[`/tanaman_list/${id}/status_sensor_aktif`] = val;
+      
+      db.ref().update(updates)
+        .then(() => {
+          if (checked && deviceId) {
+            // Jika diaktifkan, set target_tanaman_id pada device
+            return db.ref(`/devices/${deviceId}/target_tanaman_id`).set(id);
+          } else if (!checked && deviceId) {
+            // Jika dinonaktifkan, periksa apakah device ini masih menargetkan tanaman ini
+            return db.ref(`/devices/${deviceId}/target_tanaman_id`).once('value')
+              .then((snapshot) => {
+                if (snapshot.val() === id) {
+                  return db.ref(`/devices/${deviceId}/target_tanaman_id`).set("");
+                }
+              });
+          }
+        })
         .catch(err => {
           alert("Gagal mengubah status sensor: " + err.message);
         });
@@ -271,19 +300,32 @@
     // Delete Plant
     function deletePlant(id, name) {
       if (confirm(`Apakah Anda yakin ingin menghapus data tanaman "${name}" (${id})?`)) {
-        db.ref(`/tanaman_list/${id}`).remove()
-          .then(() => {
-            alert(`Tanaman "${name}" berhasil dihapus.`);
-          })
-          .catch(err => {
-            alert("Gagal menghapus tanaman: " + err.message);
-          });
+        // Dapatkan device_id terlebih dahulu sebelum dihapus
+        db.ref(`/tanaman_list/${id}`).once('value').then((snapshot) => {
+          const data = snapshot.val() || {};
+          const deviceId = data.device_id;
+          
+          return db.ref(`/tanaman_list/${id}`).remove()
+            .then(() => {
+              if (deviceId) {
+                return db.ref(`/devices/${deviceId}/target_tanaman_id`).once('value').then((snap) => {
+                  if (snap.val() === id) {
+                    return db.ref(`/devices/${deviceId}/target_tanaman_id`).set("");
+                  }
+                });
+              }
+            });
+        }).then(() => {
+          alert(`Tanaman "${name}" berhasil dihapus.`);
+        }).catch(err => {
+          alert("Gagal menghapus tanaman: " + err.message);
+        });
       }
     }
 
     // Edit Plant filler
-    function editPlant(id, name, desc, benchmark) {
-      openModal('edit', id, name, desc, benchmark);
+    function editPlant(id, name, desc, benchmark, deviceId) {
+      openModal('edit', id, name, desc, benchmark, deviceId);
     }
 
     // Handle Form Submit (Add / Edit)
@@ -291,12 +333,17 @@
       event.preventDefault();
       const mode = modalModeInput.value;
       const id = plantIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, ""); // Bersihkan ID dari karakter aneh
+      const deviceId = deviceIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "");
       const name = plantNameInput.value.trim();
       const desc = plantDescInput.value.trim();
       const benchmark = parseInt(plantBenchmarkInput.value);
 
       if (!id) {
         alert("ID Tanaman tidak boleh kosong dan harus alfanumerik!");
+        return;
+      }
+      if (!deviceId) {
+        alert("ID Perangkat tidak boleh kosong dan harus alfanumerik!");
         return;
       }
 
@@ -311,7 +358,11 @@
               nama: name,
               deskripsi: desc,
               benchmark_gas: benchmark,
+              device_id: deviceId,
               status_sensor_aktif: 1 // default aktif
+            }).then(() => {
+              // Set device mapping also because it is active by default
+              return db.ref(`/devices/${deviceId}/target_tanaman_id`).set(id);
             }).then(() => {
               closeModal();
             }).catch(err => {
@@ -321,14 +372,39 @@
         });
       } else {
         // Update
-        db.ref(`/tanaman_list/${id}`).update({
-          nama: name,
-          deskripsi: desc,
-          benchmark_gas: benchmark
-        }).then(() => {
-          closeModal();
-        }).catch(err => {
-          alert("Gagal memperbarui tanaman: " + err.message);
+        // Dapatkan data tanaman lama terlebih dahulu untuk mengetahui device_id sebelumnya
+        db.ref(`/tanaman_list/${id}`).once('value').then((snapshot) => {
+          const oldData = snapshot.val() || {};
+          const oldDeviceId = oldData.device_id;
+          const isActive = oldData.status_sensor_aktif === 1;
+
+          db.ref(`/tanaman_list/${id}`).update({
+            nama: name,
+            deskripsi: desc,
+            benchmark_gas: benchmark,
+            device_id: deviceId
+          }).then(() => {
+            // Jika device_id berubah, bersihkan target_tanaman_id di device yang lama
+            const promises = [];
+            if (oldDeviceId && oldDeviceId !== deviceId) {
+              promises.push(
+                db.ref(`/devices/${oldDeviceId}/target_tanaman_id`).once('value').then((snap) => {
+                  if (snap.val() === id) {
+                    return db.ref(`/devices/${oldDeviceId}/target_tanaman_id`).set("");
+                  }
+                })
+              );
+            }
+            // Jika sensor dalam keadaan aktif, set target_tanaman_id pada device yang baru
+            if (isActive) {
+              promises.push(db.ref(`/devices/${deviceId}/target_tanaman_id`).set(id));
+            }
+            return Promise.all(promises);
+          }).then(() => {
+            closeModal();
+          }).catch(err => {
+            alert("Gagal memperbarui tanaman: " + err.message);
+          });
         });
       }
     }
