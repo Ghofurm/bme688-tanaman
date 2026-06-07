@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Tomato Monitoring 🍅</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Gradient Background */
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col items-center py-10 px-4">
+
+  <!-- Header -->
+  <header class="text-center mb-10">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-amber-500 flex items-center justify-center gap-2">
+      Smart Tomato Monitoring 🍅
+    </h1>
+    <p class="text-slate-400 mt-2 text-lg">Dashboard Pemantauan Tanaman Tomat Real-time</p>
+  </header>
+
+  <!-- Main Container -->
+  <main class="w-full max-w-4xl flex flex-col gap-8">
+    
+    <!-- Sensor Data Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      
+      <!-- Card: Temperatur -->
+      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Temperatur</span>
+          <span class="text-3xl">🌡️</span>
+        </div>
+        <div>
+          <span id="temp-value" class="text-4xl font-bold text-red-400">Loading...</span>
+          <span class="text-slate-400 text-lg font-medium ml-1">°C</span>
+        </div>
+      </div>
+
+      <!-- Card: Kelembapan -->
+      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Kelembapan</span>
+          <span class="text-3xl">💧</span>
+        </div>
+        <div>
+          <span id="hum-value" class="text-4xl font-bold text-blue-400">Loading...</span>
+          <span class="text-slate-400 text-lg font-medium ml-1">%</span>
+        </div>
+      </div>
+
+      <!-- Card: Gas Resistance -->
+      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Gas Resistance</span>
+          <span class="text-3xl">⚡</span>
+        </div>
+        <div>
+          <span id="gas-value" class="text-4xl font-bold text-emerald-400">Loading...</span>
+          <span class="text-slate-400 text-lg font-medium ml-1">Ω</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Status Tanaman & Control Section -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      <!-- Panel: Status Tanaman -->
+      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-300 mb-4 flex items-center gap-2">
+            🌱 Indikator Status Tanaman
+          </h2>
+          <p class="text-sm text-slate-400 mb-6">Status kesehatan tomat berdasarkan data hambatan gas sensor BME688.</p>
+        </div>
+        <div class="flex items-center justify-center p-4 bg-slate-900/50 rounded-xl min-h-[80px]">
+          <span id="status-badge" class="text-xl font-bold text-slate-400">Mengecek status...</span>
+        </div>
+      </div>
+
+      <!-- Panel: Kontrol Jarak Jauh -->
+      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-300 mb-2 flex items-center gap-2">
+            🔌 Kontrol Jarak Jauh
+          </h2>
+          <p class="text-sm text-slate-400 mb-6">Saklar untuk mengaktifkan atau menonaktifkan sensor ESP32.</p>
+        </div>
+        <div class="flex flex-col items-center gap-3">
+          <!-- Toggle Switch -->
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="control-toggle" class="sr-only peer">
+            <div class="w-14 h-7 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+          <span id="control-label" class="text-slate-400 font-semibold text-sm">Status: Loading...</span>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-auto pt-10 text-slate-500 text-xs">
+    © 2026 Smart Tomato Monitoring System. All rights reserved.
+  </footer>
+
+  <!-- Firebase JavaScript SDK v8 (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <script>
+    // ============================================
+    // GANTI BAGIAN INI DENGAN FIREBASE CONFIG KAMU
+    // ============================================
+    const firebaseConfig = {
+      apiKey: "API_KEY_KAMU",
+      authDomain: "PROJECT_ID_KAMU.firebaseapp.com",
+      databaseURL: "https://PROJECT_ID_KAMU-default-rtdb.firebaseio.com",
+      projectId: "PROJECT_ID_KAMU",
+    };
+    // ============================================
+
+    // Inisialisasi Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // DOM Elements
+    const tempValueEl = document.getElementById('temp-value');
+    const humValueEl = document.getElementById('hum-value');
+    const gasValueEl = document.getElementById('gas-value');
+    const statusBadgeEl = document.getElementById('status-badge');
+    const controlToggleEl = document.getElementById('control-toggle');
+    const controlLabelEl = document.getElementById('control-label');
+
+    // Real-time Listener untuk Monitoring Sensor
+    db.ref('/monitoring/tanaman_1').on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        // Tampilkan temperatur
+        if (data.temperatur !== undefined) {
+          tempValueEl.innerText = parseFloat(data.temperatur).toFixed(2);
+        }
+        
+        // Tampilkan kelembapan
+        if (data.kelembapan !== undefined) {
+          humValueEl.innerText = parseFloat(data.kelembapan).toFixed(2);
+        }
+
+        // Tampilkan gas resistance & Indikator Status Tanaman
+        if (data.gas_resistance !== undefined) {
+          const gas = parseFloat(data.gas_resistance);
+          gasValueEl.innerText = gas >= 0 ? gas.toLocaleString('id-ID') : 'Warming up';
+          
+          if (gas > 100000) {
+            statusBadgeEl.innerHTML = '<span class="text-emerald-400">🌿 Tomat Sehat</span>';
+          } else if (gas >= 0 && gas <= 100000) {
+            statusBadgeEl.innerHTML = '<span class="text-rose-500">⚠️ Tomat Stres / Sakit</span>';
+          } else {
+            statusBadgeEl.innerHTML = '<span class="text-amber-500">⚠️ Sensor Warming Up</span>';
+          }
+        }
+      } else {
+        tempValueEl.innerText = '--';
+        humValueEl.innerText = '--';
+        gasValueEl.innerText = '--';
+        statusBadgeEl.innerText = 'Tidak ada data';
+      }
+    }, (error) => {
+      console.error("Gagal membaca Firebase:", error);
+      statusBadgeEl.innerText = "Error mengambil data";
+    });
+
+    // Real-time Listener untuk Control Status
+    db.ref('/control/status_sensor').on('value', (snapshot) => {
+      const val = snapshot.val();
+      if (val === 1) {
+        controlToggleEl.checked = true;
+        controlLabelEl.innerText = "Status: Aktif (ON)";
+        controlLabelEl.classList.replace('text-slate-400', 'text-emerald-400');
+        controlLabelEl.classList.replace('text-rose-400', 'text-emerald-400');
+      } else {
+        controlToggleEl.checked = false;
+        controlLabelEl.innerText = "Status: Nonaktif (OFF)";
+        controlLabelEl.classList.replace('text-slate-400', 'text-rose-400');
+        controlLabelEl.classList.replace('text-emerald-400', 'text-rose-400');
+      }
+    });
+
+    // Event Listener untuk Mengubah Control Status ke Firebase
+    controlToggleEl.addEventListener('change', (event) => {
+      const isChecked = event.target.checked;
+      const statusValue = isChecked ? 1 : 0;
+      
+      // Update label sementara sebelum respons dari DB kembali
+      controlLabelEl.innerText = "Mengirim...";
+      controlLabelEl.className = "text-slate-400 font-semibold text-sm";
+
+      db.ref('/control/status_sensor').set(statusValue)
+        .then(() => {
+          console.log("Status berhasil diperbarui di Firebase!");
+        })
+        .catch((error) => {
+          console.error("Gagal memperbarui status di Firebase:", error);
+          alert("Gagal mengirim perintah ke Firebase");
+        });
+    });
+  </script>
+</body>
+</html>
