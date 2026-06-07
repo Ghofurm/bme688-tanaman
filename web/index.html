@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,11 +14,13 @@
     }
   </style>
 </head>
+
 <body class="text-slate-100 min-h-screen flex flex-col items-center py-10 px-4">
 
   <!-- Header -->
   <header class="text-center mb-10">
-    <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-amber-500 flex items-center justify-center gap-2">
+    <h1
+      class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-amber-500 flex items-center justify-center gap-2">
       Smart Tomato Monitoring 🍅
     </h1>
     <p class="text-slate-400 mt-2 text-lg">Dashboard Pemantauan Tanaman Tomat Real-time</p>
@@ -25,12 +28,13 @@
 
   <!-- Main Container -->
   <main class="w-full max-w-4xl flex flex-col gap-8">
-    
+
     <!-- Sensor Data Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      
+
       <!-- Card: Temperatur -->
-      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
+      <div
+        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
         <div class="flex items-center justify-between mb-4">
           <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Temperatur</span>
           <span class="text-3xl">🌡️</span>
@@ -42,7 +46,8 @@
       </div>
 
       <!-- Card: Kelembapan -->
-      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
+      <div
+        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
         <div class="flex items-center justify-between mb-4">
           <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Kelembapan</span>
           <span class="text-3xl">💧</span>
@@ -54,7 +59,8 @@
       </div>
 
       <!-- Card: Gas Resistance -->
-      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
+      <div
+        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
         <div class="flex items-center justify-between mb-4">
           <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Gas Resistance</span>
           <span class="text-3xl">⚡</span>
@@ -69,9 +75,10 @@
 
     <!-- Status Tanaman & Control Section -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      
+
       <!-- Panel: Status Tanaman -->
-      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+      <div
+        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
         <div>
           <h2 class="text-lg font-bold text-slate-300 mb-4 flex items-center gap-2">
             🌱 Indikator Status Tanaman
@@ -84,7 +91,8 @@
       </div>
 
       <!-- Panel: Kontrol Jarak Jauh -->
-      <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+      <div
+        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
         <div>
           <h2 class="text-lg font-bold text-slate-300 mb-2 flex items-center gap-2">
             🔌 Kontrol Jarak Jauh
@@ -95,7 +103,9 @@
           <!-- Toggle Switch -->
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" id="control-toggle" class="sr-only peer">
-            <div class="w-14 h-7 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+            <div
+              class="w-14 h-7 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500">
+            </div>
           </label>
           <span id="control-label" class="text-slate-400 font-semibold text-sm">Status: Loading...</span>
         </div>
@@ -119,10 +129,13 @@
     // GANTI BAGIAN INI DENGAN FIREBASE CONFIG KAMU
     // ============================================
     const firebaseConfig = {
-      apiKey: "API_KEY_KAMU",
-      authDomain: "PROJECT_ID_KAMU.firebaseapp.com",
-      databaseURL: "https://PROJECT_ID_KAMU-default-rtdb.firebaseio.com",
-      projectId: "PROJECT_ID_KAMU",
+      apiKey: "AIzaSyB23z9NoFYa_8knhe-smababbwyBKsb8Cc",
+      authDomain: "bme688-tanaman.firebaseapp.com",
+      databaseURL: "https://bme688-tanaman-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "bme688-tanaman",
+      storageBucket: "bme688-tanaman.firebasestorage.app",
+      messagingSenderId: "277698092967",
+      appId: "1:277698092967:web:e9955d2143fb4ffb662082"
     };
     // ============================================
 
@@ -146,7 +159,7 @@
         if (data.temperatur !== undefined) {
           tempValueEl.innerText = parseFloat(data.temperatur).toFixed(2);
         }
-        
+
         // Tampilkan kelembapan
         if (data.kelembapan !== undefined) {
           humValueEl.innerText = parseFloat(data.kelembapan).toFixed(2);
@@ -156,7 +169,7 @@
         if (data.gas_resistance !== undefined) {
           const gas = parseFloat(data.gas_resistance);
           gasValueEl.innerText = gas >= 0 ? gas.toLocaleString('id-ID') : 'Warming up';
-          
+
           if (gas > 100000) {
             statusBadgeEl.innerHTML = '<span class="text-emerald-400">🌿 Tomat Sehat</span>';
           } else if (gas >= 0 && gas <= 100000) {
@@ -196,7 +209,7 @@
     controlToggleEl.addEventListener('change', (event) => {
       const isChecked = event.target.checked;
       const statusValue = isChecked ? 1 : 0;
-      
+
       // Update label sementara sebelum respons dari DB kembali
       controlLabelEl.innerText = "Mengirim...";
       controlLabelEl.className = "text-slate-400 font-semibold text-sm";
@@ -212,4 +225,5 @@
     });
   </script>
 </body>
+
 </html>
