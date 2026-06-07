@@ -4,12 +4,7 @@
 #include <Adafruit_BME680.h>
 #include <WiFi.h>
 #include <FirebaseESP32.h>
-
-// Definisi Kredensial WiFi dan Firebase (Silakan sesuaikan dengan punya Anda)
-#define WIFI_SSID "NAMA_WIFI_KAMU"
-#define WIFI_PASSWORD "PASSWORD_WIFI_KAMU"
-#define FIREBASE_HOST "URL_DATABASE_KAMU.firebaseio.com" // URL database tanpa https:// dan tanpa tanda / di akhir
-#define FIREBASE_AUTH "DATABASE_SECRET_KAMU"             // Database Secret
+#include "secrets.h"
 
 // Inisialisasi Objek Sensor dan Firebase
 Adafruit_BME680 bme;
