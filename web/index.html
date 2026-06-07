@@ -4,120 +4,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Tomato Monitoring 🍅</title>
+  <title>Multi-Plant Monitoring Dashboard 🌿</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Gradient Background */
     body {
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     }
   </style>
 </head>
 
-<body class="text-slate-100 min-h-screen flex flex-col items-center py-10 px-4">
+<body class="text-slate-100 min-h-screen flex flex-col py-10 px-4">
 
   <!-- Header -->
   <header class="text-center mb-10">
-    <h1
-      class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-amber-500 flex items-center justify-center gap-2">
-      Smart Tomato Monitoring 🍅
+    <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500 flex items-center justify-center gap-2">
+      Multi-Plant Monitoring 🌿
     </h1>
-    <p class="text-slate-400 mt-2 text-lg">Dashboard Pemantauan Tanaman Tomat Real-time</p>
+    <p class="text-slate-400 mt-2 text-lg">Dashboard Pemantauan & Manajemen Tanaman Real-time</p>
   </header>
 
   <!-- Main Container -->
-  <main class="w-full max-w-4xl flex flex-col gap-8">
-
-    <!-- Sensor Data Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-      <!-- Card: Temperatur -->
-      <div
-        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
-        <div class="flex items-center justify-between mb-4">
-          <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Temperatur</span>
-          <span class="text-3xl">🌡️</span>
-        </div>
-        <div>
-          <span id="temp-value" class="text-4xl font-bold text-red-400">Loading...</span>
-          <span class="text-slate-400 text-lg font-medium ml-1">°C</span>
-        </div>
-      </div>
-
-      <!-- Card: Kelembapan -->
-      <div
-        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
-        <div class="flex items-center justify-between mb-4">
-          <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Kelembapan</span>
-          <span class="text-3xl">💧</span>
-        </div>
-        <div>
-          <span id="hum-value" class="text-4xl font-bold text-blue-400">Loading...</span>
-          <span class="text-slate-400 text-lg font-medium ml-1">%</span>
-        </div>
-      </div>
-
-      <!-- Card: Gas Resistance -->
-      <div
-        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.02] duration-300">
-        <div class="flex items-center justify-between mb-4">
-          <span class="text-slate-400 font-semibold tracking-wider text-sm uppercase">Gas Resistance</span>
-          <span class="text-3xl">⚡</span>
-        </div>
-        <div>
-          <span id="gas-value" class="text-4xl font-bold text-emerald-400">Loading...</span>
-          <span class="text-slate-400 text-lg font-medium ml-1">Ω</span>
-        </div>
-      </div>
-
+  <main class="w-full max-w-6xl mx-auto flex flex-col gap-8 flex-grow">
+    
+    <!-- Top Action Bar -->
+    <div class="flex justify-between items-center bg-slate-800/50 backdrop-blur border border-slate-700/50 p-4 rounded-2xl shadow-lg">
+      <h2 class="text-xl font-semibold text-slate-300">Daftar Tanaman</h2>
+      <button onclick="openModal('add')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-md hover:shadow-emerald-500/20 active:scale-95">
+        + Tambah Tanaman
+      </button>
     </div>
 
-    <!-- Status Tanaman & Control Section -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <!-- Panel: Status Tanaman -->
-      <div
-        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-        <div>
-          <h2 class="text-lg font-bold text-slate-300 mb-4 flex items-center gap-2">
-            🌱 Indikator Status Tanaman
-          </h2>
-          <p class="text-sm text-slate-400 mb-6">Status kesehatan tomat berdasarkan data hambatan gas sensor BME688.</p>
-        </div>
-        <div class="flex items-center justify-center p-4 bg-slate-900/50 rounded-xl min-h-[80px]">
-          <span id="status-badge" class="text-xl font-bold text-slate-400">Mengecek status...</span>
-        </div>
+    <!-- Plant Cards Grid -->
+    <div id="plant-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Loading State -->
+      <div class="col-span-full text-center py-10 text-slate-400">
+        <div class="animate-pulse text-lg">Memuat data tanaman...</div>
       </div>
-
-      <!-- Panel: Kontrol Jarak Jauh -->
-      <div
-        class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-        <div>
-          <h2 class="text-lg font-bold text-slate-300 mb-2 flex items-center gap-2">
-            🔌 Kontrol Jarak Jauh
-          </h2>
-          <p class="text-sm text-slate-400 mb-6">Saklar untuk mengaktifkan atau menonaktifkan sensor ESP32.</p>
-        </div>
-        <div class="flex flex-col items-center gap-3">
-          <!-- Toggle Switch -->
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="control-toggle" class="sr-only peer">
-            <div
-              class="w-14 h-7 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500">
-            </div>
-          </label>
-          <span id="control-label" class="text-slate-400 font-semibold text-sm">Status: Loading...</span>
-        </div>
-      </div>
-
     </div>
 
   </main>
 
+  <!-- Modal Form (Add/Edit Plant) -->
+  <div id="plant-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl m-4 transform scale-95 transition-transform duration-300">
+      <div class="flex justify-between items-center mb-6">
+        <h3 id="modal-title" class="text-xl font-bold text-slate-200">Tambah Tanaman Baru</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-200 text-2xl font-bold">&times;</button>
+      </div>
+      <form id="modal-form" onsubmit="handleFormSubmit(event)">
+        <input type="hidden" id="modal-mode" value="add">
+        
+        <div class="mb-4">
+          <label class="block text-slate-400 text-sm font-semibold mb-2" for="plant-id">ID Tanaman (misal: tanaman_001)</label>
+          <input type="text" id="plant-id" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-slate-400 text-sm font-semibold mb-2" for="plant-name">Nama Tanaman</label>
+          <input type="text" id="plant-name" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-slate-400 text-sm font-semibold mb-2" for="plant-desc">Deskripsi</label>
+          <textarea id="plant-desc" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"></textarea>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-slate-400 text-sm font-semibold mb-2" for="plant-benchmark">Benchmark Gas Sehat (Ohm)</label>
+          <input type="number" id="plant-benchmark" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors" placeholder="100000">
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button type="button" onclick="closeModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 px-5 rounded-xl transition-colors">Batal</button>
+          <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-5 rounded-xl transition-colors shadow-md shadow-emerald-500/10">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Footer -->
-  <footer class="mt-auto pt-10 text-slate-500 text-xs">
-    © 2026 Smart Tomato Monitoring System. All rights reserved.
+  <footer class="mt-auto pt-10 text-slate-500 text-xs text-center">
+    © 2026 Multi-Plant Monitoring System. All rights reserved.
   </footer>
 
   <!-- Firebase JavaScript SDK v8 (compat) -->
@@ -125,9 +93,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <script>
-    // ============================================
-    // GANTI BAGIAN INI DENGAN FIREBASE CONFIG KAMU
-    // ============================================
+    // Firebase Configuration (Gunakan konfigurasi Anda)
     const firebaseConfig = {
       apiKey: "AIzaSyB23z9NoFYa_8knhe-smababbwyBKsb8Cc",
       authDomain: "bme688-tanaman.firebaseapp.com",
@@ -137,92 +103,235 @@
       messagingSenderId: "277698092967",
       appId: "1:277698092967:web:e9955d2143fb4ffb662082"
     };
-    // ============================================
 
     // Inisialisasi Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
     // DOM Elements
-    const tempValueEl = document.getElementById('temp-value');
-    const humValueEl = document.getElementById('hum-value');
-    const gasValueEl = document.getElementById('gas-value');
-    const statusBadgeEl = document.getElementById('status-badge');
-    const controlToggleEl = document.getElementById('control-toggle');
-    const controlLabelEl = document.getElementById('control-label');
+    const plantGrid = document.getElementById('plant-grid');
+    const plantModal = document.getElementById('plant-modal');
+    const modalForm = document.getElementById('modal-form');
+    const modalTitle = document.getElementById('modal-title');
+    const modalModeInput = document.getElementById('modal-mode');
+    const plantIdInput = document.getElementById('plant-id');
+    const plantNameInput = document.getElementById('plant-name');
+    const plantDescInput = document.getElementById('plant-desc');
+    const plantBenchmarkInput = document.getElementById('plant-benchmark');
 
-    // Real-time Listener untuk Monitoring Sensor
-    db.ref('/monitoring/tanaman_1').on('value', (snapshot) => {
+    // Real-time Database Listener
+    db.ref('/tanaman_list').on('value', (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        // Tampilkan temperatur
-        if (data.temperatur !== undefined) {
-          tempValueEl.innerText = parseFloat(data.temperatur).toFixed(2);
-        }
-
-        // Tampilkan kelembapan
-        if (data.kelembapan !== undefined) {
-          humValueEl.innerText = parseFloat(data.kelembapan).toFixed(2);
-        }
-
-        // Tampilkan gas resistance & Indikator Status Tanaman
-        if (data.gas_resistance !== undefined) {
-          const gas = parseFloat(data.gas_resistance);
-          gasValueEl.innerText = gas >= 0 ? gas.toLocaleString('id-ID') : 'Warming up';
-
-          if (gas > 100000) {
-            statusBadgeEl.innerHTML = '<span class="text-emerald-400">🌿 Tomat Sehat</span>';
-          } else if (gas >= 0 && gas <= 100000) {
-            statusBadgeEl.innerHTML = '<span class="text-rose-500">⚠️ Tomat Stres / Sakit</span>';
-          } else {
-            statusBadgeEl.innerHTML = '<span class="text-amber-500">⚠️ Sensor Warming Up</span>';
-          }
-        }
-      } else {
-        tempValueEl.innerText = '--';
-        humValueEl.innerText = '--';
-        gasValueEl.innerText = '--';
-        statusBadgeEl.innerText = 'Tidak ada data';
-      }
+      renderPlantCards(data);
     }, (error) => {
-      console.error("Gagal membaca Firebase:", error);
-      statusBadgeEl.innerText = "Error mengambil data";
+      console.error("Gagal membaca database Firebase:", error);
+      plantGrid.innerHTML = `<div class="col-span-full text-center py-10 text-rose-400">Gagal memuat data: ${error.message}</div>`;
     });
 
-    // Real-time Listener untuk Control Status
-    db.ref('/control/status_sensor').on('value', (snapshot) => {
-      const val = snapshot.val();
-      if (val === 1) {
-        controlToggleEl.checked = true;
-        controlLabelEl.innerText = "Status: Aktif (ON)";
-        controlLabelEl.classList.replace('text-slate-400', 'text-emerald-400');
-        controlLabelEl.classList.replace('text-rose-400', 'text-emerald-400');
-      } else {
-        controlToggleEl.checked = false;
-        controlLabelEl.innerText = "Status: Nonaktif (OFF)";
-        controlLabelEl.classList.replace('text-slate-400', 'text-rose-400');
-        controlLabelEl.classList.replace('text-emerald-400', 'text-rose-400');
+    // Render cards
+    function renderPlantCards(plants) {
+      if (!plants) {
+        plantGrid.innerHTML = `
+          <div class="col-span-full text-center py-10 text-slate-400">
+            <p class="text-lg mb-2">Belum ada tanaman terdaftar.</p>
+            <p class="text-sm">Klik tombol "+ Tambah Tanaman" untuk menambahkan.</p>
+          </div>
+        `;
+        return;
       }
-    });
 
-    // Event Listener untuk Mengubah Control Status ke Firebase
-    controlToggleEl.addEventListener('change', (event) => {
-      const isChecked = event.target.checked;
-      const statusValue = isChecked ? 1 : 0;
+      let htmlContent = '';
+      Object.keys(plants).forEach((id) => {
+        const p = plants[id];
+        const latest = p.data_terakhir || {};
+        const isActive = p.status_sensor_aktif === 1;
+        const benchmark = parseFloat(p.benchmark_gas) || 100000;
+        const gas = latest.gas_resistance !== undefined ? parseFloat(latest.gas_resistance) : -1;
 
-      // Update label sementara sebelum respons dari DB kembali
-      controlLabelEl.innerText = "Mengirim...";
-      controlLabelEl.className = "text-slate-400 font-semibold text-sm";
+        // Tentukan status kesehatan
+        let healthBadge = '';
+        if (!isActive) {
+          healthBadge = '<span class="px-2.5 py-1 text-xs font-bold bg-slate-700/60 text-slate-400 rounded-full">💤 Sensor Mati</span>';
+        } else if (gas === -1) {
+          healthBadge = '<span class="px-2.5 py-1 text-xs font-bold bg-amber-500/20 text-amber-400 rounded-full">⚡ Warming Up</span>';
+        } else if (gas >= benchmark) {
+          healthBadge = '<span class="px-2.5 py-1 text-xs font-bold bg-emerald-500/20 text-emerald-400 rounded-full">🌿 Sehat</span>';
+        } else {
+          healthBadge = '<span class="px-2.5 py-1 text-xs font-bold bg-rose-500/20 text-rose-400 rounded-full">⚠️ Sakit / Stres</span>';
+        }
 
-      db.ref('/control/status_sensor').set(statusValue)
-        .then(() => {
-          console.log("Status berhasil diperbarui di Firebase!");
-        })
-        .catch((error) => {
-          console.error("Gagal memperbarui status di Firebase:", error);
-          alert("Gagal mengirim perintah ke Firebase");
+        // Tampilkan nilai sensor
+        const tempText = latest.temperatur !== undefined ? `${parseFloat(latest.temperatur).toFixed(1)}°C` : '--';
+        const humText = latest.kelembapan !== undefined ? `${parseFloat(latest.kelembapan).toFixed(1)}%` : '--';
+        const gasText = gas >= 0 ? `${gas.toLocaleString('id-ID')} Ω` : '--';
+
+        htmlContent += `
+          <div class="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition hover:scale-[1.01] duration-300">
+            <div>
+              <div class="flex justify-between items-start gap-2 mb-2">
+                <div>
+                  <h3 class="text-lg font-bold text-slate-100">${p.nama}</h3>
+                  <span class="text-xs text-slate-500 font-mono">${id}</span>
+                </div>
+                ${healthBadge}
+              </div>
+              <p class="text-slate-400 text-sm mb-4 line-clamp-2">${p.deskripsi || 'Tidak ada deskripsi.'}</p>
+              
+              <!-- Sensor readings grid -->
+              <div class="grid grid-cols-3 gap-2 py-3 border-y border-slate-700/50 my-4 text-center">
+                <div>
+                  <span class="block text-[10px] text-slate-500 uppercase tracking-wider">Suhu</span>
+                  <span class="text-sm font-semibold text-red-400">${tempText}</span>
+                </div>
+                <div>
+                  <span class="block text-[10px] text-slate-500 uppercase tracking-wider">Lembap</span>
+                  <span class="text-sm font-semibold text-blue-400">${humText}</span>
+                </div>
+                <div>
+                  <span class="block text-[10px] text-slate-500 uppercase tracking-wider">Gas</span>
+                  <span class="text-sm font-semibold text-emerald-400 truncate block px-1">${gasText}</span>
+                </div>
+              </div>
+              
+              <div class="flex justify-between items-center text-xs text-slate-400 mb-6">
+                <span>Benchmark Gas: <strong class="text-slate-300">${benchmark.toLocaleString('id-ID')} Ω</strong></span>
+              </div>
+            </div>
+
+            <!-- Actions footer -->
+            <div class="flex justify-between items-center mt-auto pt-2">
+              <!-- Sensor Active Toggle Switch -->
+              <div class="flex items-center gap-2">
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked)" class="sr-only peer">
+                  <div class="w-10 h-5.5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+                <span class="text-xs text-slate-400 font-semibold">${isActive ? 'Aktif' : 'Mati'}</span>
+              </div>
+
+              <!-- Edit & Delete Buttons -->
+              <div class="flex gap-2">
+                <button onclick="editPlant('${id}', '${p.nama}', '${p.deskripsi || ''}', ${benchmark})" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold p-2 rounded-lg text-xs transition-colors">
+                  Edit
+                </button>
+                <button onclick="deletePlant('${id}', '${p.nama}')" class="bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white font-semibold p-2 rounded-lg text-xs transition-colors">
+                  Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      plantGrid.innerHTML = htmlContent;
+    }
+
+    // Modal Control
+    function openModal(mode, id = '', name = '', desc = '', benchmark = '') {
+      modalModeInput.value = mode;
+      if (mode === 'add') {
+        modalTitle.innerText = "Tambah Tanaman Baru";
+        plantIdInput.disabled = false;
+        plantIdInput.value = '';
+        plantNameInput.value = '';
+        plantDescInput.value = '';
+        plantBenchmarkInput.value = '100000';
+      } else {
+        modalTitle.innerText = "Edit Tanaman";
+        plantIdInput.disabled = true; // Jangan biarkan ID diubah karena referensi sensor
+        plantIdInput.value = id;
+        plantNameInput.value = name;
+        plantDescInput.value = desc;
+        plantBenchmarkInput.value = benchmark;
+      }
+      plantModal.classList.remove('hidden');
+      setTimeout(() => {
+        plantModal.classList.remove('opacity-0');
+        plantModal.querySelector('div').classList.remove('scale-95');
+      }, 50);
+    }
+
+    // Close Modal
+    function closeModal() {
+      plantModal.classList.add('opacity-0');
+      plantModal.querySelector('div').classList.add('scale-95');
+      setTimeout(() => {
+        plantModal.classList.add('hidden');
+      }, 300);
+    }
+
+    // Toggle Sensor Switch
+    function toggleSensor(id, checked) {
+      const val = checked ? 1 : 0;
+      db.ref(`/tanaman_list/${id}/status_sensor_aktif`).set(val)
+        .catch(err => {
+          alert("Gagal mengubah status sensor: " + err.message);
         });
-    });
+    }
+
+    // Delete Plant
+    function deletePlant(id, name) {
+      if (confirm(`Apakah Anda yakin ingin menghapus data tanaman "${name}" (${id})?`)) {
+        db.ref(`/tanaman_list/${id}`).remove()
+          .then(() => {
+            alert(`Tanaman "${name}" berhasil dihapus.`);
+          })
+          .catch(err => {
+            alert("Gagal menghapus tanaman: " + err.message);
+          });
+      }
+    }
+
+    // Edit Plant filler
+    function editPlant(id, name, desc, benchmark) {
+      openModal('edit', id, name, desc, benchmark);
+    }
+
+    // Handle Form Submit (Add / Edit)
+    function handleFormSubmit(event) {
+      event.preventDefault();
+      const mode = modalModeInput.value;
+      const id = plantIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, ""); // Bersihkan ID dari karakter aneh
+      const name = plantNameInput.value.trim();
+      const desc = plantDescInput.value.trim();
+      const benchmark = parseInt(plantBenchmarkInput.value);
+
+      if (!id) {
+        alert("ID Tanaman tidak boleh kosong dan harus alfanumerik!");
+        return;
+      }
+
+      if (mode === 'add') {
+        // Cek dulu apakah ID sudah ada
+        db.ref(`/tanaman_list/${id}`).once('value').then((snapshot) => {
+          if (snapshot.exists()) {
+            alert(`Tanaman dengan ID "${id}" sudah ada di database. Gunakan ID lain.`);
+          } else {
+            // Save new
+            db.ref(`/tanaman_list/${id}`).set({
+              nama: name,
+              deskripsi: desc,
+              benchmark_gas: benchmark,
+              status_sensor_aktif: 1 // default aktif
+            }).then(() => {
+              closeModal();
+            }).catch(err => {
+              alert("Gagal menambahkan tanaman: " + err.message);
+            });
+          }
+        });
+      } else {
+        // Update
+        db.ref(`/tanaman_list/${id}`).update({
+          nama: name,
+          deskripsi: desc,
+          benchmark_gas: benchmark
+        }).then(() => {
+          closeModal();
+        }).catch(err => {
+          alert("Gagal memperbarui tanaman: " + err.message);
+        });
+      }
+    }
   </script>
 </body>
 
