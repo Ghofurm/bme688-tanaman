@@ -13,8 +13,8 @@ FirebaseConfig config;
 FirebaseAuth auth;
 
 unsigned long lastSendTime = 0;
-const unsigned long sendInterval = 15000; // Interval pengiriman data 15 detik
-bool sensorAktif = true;                  // Status aktif sensor tanaman
+const unsigned long sendInterval = 15000; // Interval pengiriman/pengecekan data 15 detik
+bool isSensorInitialized = false;          // Flag inisialisasi sensor
 
 // Fungsi untuk menghubungkan ke WiFi dengan auto-reconnect
 void connectWiFi()
@@ -45,6 +45,26 @@ void connectWiFi()
   {
     Serial.println("\n[WiFi] Gagal terhubung. Akan dicoba kembali nanti.");
   }
+}
+
+// Fungsi untuk menginisialisasi sensor BME688
+bool initializeSensor()
+{
+  Serial.println("[BME688] Menginisialisasi sensor...");
+  if (!bme.begin(0x77)) // Ganti ke 0x76 jika SDO disambungkan ke GND
+  {
+    Serial.println("[ERROR] Sensor tidak ditemukan! Periksa wiring.");
+    return false;
+  }
+
+  bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setHumidityOversampling(BME680_OS_2X);
+  bme.setPressureOversampling(BME680_OS_4X);
+  bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
+  bme.setGasHeater(320, 150); // 320°C selama 150ms
+
+  Serial.println("[OK] Sensor BME688 Siap!");
+  return true;
 }
 
 // Fungsi untuk mengirim data sensor ke Firebase Realtime Database
@@ -84,22 +104,6 @@ void setup()
 
   Serial.println("=== BME688 & Firebase Project ===");
 
-  // Inisialisasi Sensor BME688
-  if (!bme.begin(0x77))
-  { // Ganti ke 0x76 jika SDO disambungkan ke GND
-    Serial.println("[ERROR] Sensor tidak ditemukan! Periksa wiring.");
-    while (1)
-      ;
-  }
-
-  bme.setTemperatureOversampling(BME680_OS_8X);
-  bme.setHumidityOversampling(BME680_OS_2X);
-  bme.setPressureOversampling(BME680_OS_4X);
-  bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-  bme.setGasHeater(320, 150); // 320°C selama 150ms
-
-  Serial.println("[OK] Sensor BME688 Siap!");
-
   // Koneksi WiFi pertama kali
   connectWiFi();
 
@@ -134,20 +138,41 @@ void loop()
       if (Firebase.getInt(fbdo, pathStatus.c_str()))
       {
         int statusVal = fbdo.intData();
-        bool statusAktif = (statusVal == 1);
 
-        if (statusAktif != sensorAktif)
+        if (statusVal == 0)
         {
-          sensorAktif = statusAktif;
-          if (sensorAktif)
+          if (isSensorInitialized)
           {
-            Serial.println("[BME688] Sensor diaktifkan kembali. Menyalakan heater...");
-            bme.setGasHeater(320, 150); // Aktifkan heater kembali
+            Serial.println("Sensor dimatikan jarak jauh. Standby mode...");
+            isSensorInitialized = false;
           }
-          else
+        }
+        else if (statusVal == 1)
+        {
+          if (!isSensorInitialized)
           {
-            Serial.println("[BME688] Sensor dimatikan (standby). Mematikan heater...");
-            bme.setGasHeater(0, 0); // Matikan heater untuk menghemat sensor
+            if (initializeSensor())
+            {
+              isSensorInitialized = true;
+            }
+          }
+
+          // Lakukan pembacaan data sensor & kirim jika sudah diinisialisasi
+          if (isSensorInitialized)
+          {
+            if (bme.performReading())
+            {
+              float temp = bme.temperature;
+              float hum = bme.humidity;
+              float pres = bme.pressure / 100.0;
+              float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
+
+              sendDataToFirebase(temp, hum, pres, gas);
+            }
+            else
+            {
+              Serial.println("[ERROR] Gagal membaca sensor BME688.");
+            }
           }
         }
       }
@@ -156,28 +181,6 @@ void loop()
         Serial.print("[Firebase] Gagal membaca status aktif. Alasan: ");
         Serial.println(fbdo.errorReason());
       }
-    }
-
-    // Jika aktif, kirim data terbaru ke Firebase
-    if (sensorAktif)
-    {
-      float temp = bme.temperature;
-      float hum = bme.humidity;
-      float pres = bme.pressure / 100.0;
-      float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
-
-      sendDataToFirebase(temp, hum, pres, gas);
-    }
-  }
-
-  // Lakukan pembacaan secara kontinu hanya jika sensor aktif
-  if (sensorAktif)
-  {
-    if (!bme.performReading())
-    {
-      Serial.println("[ERROR] Gagal membaca sensor BME688.");
-      delay(1000);
-      return;
     }
   }
 
@@ -189,7 +192,7 @@ void loop()
 
     Serial.println("---------------------------");
     Serial.printf("ID Tanaman    : %s\n", DEVICE_TANAMAN_ID);
-    if (sensorAktif)
+    if (isSensorInitialized)
     {
       Serial.printf("Temperatur    : %.2f C\n", bme.temperature);
       Serial.printf("Kelembapan    : %.2f %%\n", bme.humidity);
