@@ -3,6 +3,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <FirebaseESP32.h>
 #include "secrets.h"
 
@@ -16,37 +17,6 @@ unsigned long lastSendTime = 0;
 const unsigned long sendInterval = 15000; // Interval pengiriman/pengecekan data 15 detik
 bool isSensorInitialized = false;          // Flag inisialisasi sensor
 String targetTanamanID = "";               // ID Tanaman target yang didapat dinamis dari Firebase
-
-// Fungsi untuk menghubungkan ke WiFi dengan auto-reconnect
-void connectWiFi()
-{
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    return;
-  }
-
-  Serial.print("Menghubungkan ke WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  int attempt = 0;
-  while (WiFi.status() != WL_CONNECTED && attempt < 20)
-  {
-    delay(500);
-    Serial.print(".");
-    attempt++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    Serial.println("\n[WiFi] Terhubung!");
-    Serial.print("[WiFi] IP Address: ");
-    Serial.println(WiFi.localIP());
-  }
-  else
-  {
-    Serial.println("\n[WiFi] Gagal terhubung. Akan dicoba kembali nanti.");
-  }
-}
 
 // Fungsi untuk menginisialisasi sensor BME688
 bool initializeSensor()
@@ -128,8 +98,13 @@ void setup()
 
   Serial.println("=== BME688 & Firebase Project ===");
 
-  // Koneksi WiFi pertama kali
-  connectWiFi();
+  // WiFiManager: otomatis konek atau buka captive portal
+  WiFiManager wm;
+  wm.autoConnect("Smart-Tomato-Setup");
+
+  Serial.println("[WiFi] Terhubung via WiFiManager!");
+  Serial.print("[WiFi] IP Address: ");
+  Serial.println(WiFi.localIP());
 
   // Inisialisasi Konfigurasi Firebase
   config.host = FIREBASE_HOST;
@@ -143,9 +118,6 @@ void setup()
 
 void loop()
 {
-  // Pastikan WiFi tetap terhubung
-  connectWiFi();
-
   unsigned long currentMillis = millis();
 
   // Jalankan logika pembacaan status dan data sensor setiap 15 detik
