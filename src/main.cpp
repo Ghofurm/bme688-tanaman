@@ -5,6 +5,8 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <FirebaseESP32.h>
+#include <time.h>
+#include <math.h>
 #include "secrets.h"
 
 // Inisialisasi Objek Sensor dan Firebase
@@ -15,8 +17,9 @@ FirebaseAuth auth;
 
 unsigned long lastSendTime = 0;
 const unsigned long sendInterval = 15000; // Interval pengiriman/pengecekan data 15 detik
-bool isSensorInitialized = false;          // Flag inisialisasi sensor
-String targetTanamanID = "";               // ID Tanaman target yang didapat dinamis dari Firebase
+bool isSensorInitialized = false;         // Flag inisialisasi sensor
+String targetTanamanID = "";              // ID Tanaman target yang didapat dinamis dari Firebase
+float benchmarkGas = 100000.0;            // Default benchmark gas
 
 // Fungsi untuk menginisialisasi sensor BME688
 bool initializeSensor()
@@ -53,12 +56,34 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
     return;
   }
 
+  // A. Ambil nilai benchmark_gas dari Firebase
+  String pathBenchmark = String("/tanaman_list/") + targetTanamanID + "/benchmark_gas";
+  if (Firebase.getDouble(fbdo, pathBenchmark.c_str()))
+  {
+    benchmarkGas = fbdo.doubleData();
+    Serial.printf("[Firebase] Benchmark Gas: %.2f Ohm\n", benchmarkGas);
+  }
+  else
+  {
+    Serial.print("[Firebase] Gagal mengambil benchmark_gas. Menggunakan default. Alasan: ");
+    Serial.println(fbdo.errorReason());
+  }
+
+  // B. Hitung parameter ilmiah / feature engineering
+  float gasLog = (gas > 0) ? log(gas) : -1.0;
+  float gasDelta = (gas > 0) ? (gas - benchmarkGas) : 0.0;
+  // Rumus kelembapan absolut (g/m3): (6.112 * exp((17.67 * T)/(T + 243.5)) * hum * 2.1674) / (273.15 + T)
+  float absHumidity = (6.112 * exp((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp);
+
   FirebaseJson json;
+  json.set("timestamp", (int)time(nullptr));
   json.set("temperatur", temp);
   json.set("kelembapan", hum);
   json.set("tekanan_udara", pres);
   json.set("gas_resistance", gas);
-  json.set("timestamp", (int)Firebase.getCurrentTime());
+  json.set("gas_log", gasLog);
+  json.set("gas_delta", gasDelta);
+  json.set("abs_humidity", absHumidity);
 
   // 1) Update data terkini (overwrite)
   String pathTerakhir = String("/tanaman_list/") + targetTanamanID + "/data_terakhir";
@@ -100,11 +125,33 @@ void setup()
 
   // WiFiManager: otomatis konek atau buka captive portal
   WiFiManager wm;
-  wm.autoConnect("Smart-Tomato-Setup");
+  wm.autoConnect("Smart-Plant-Monitor");
 
   Serial.println("[WiFi] Terhubung via WiFiManager!");
   Serial.print("[WiFi] IP Address: ");
   Serial.println(WiFi.localIP());
+
+  // NTP Server Config (timezone Asia/Jakarta GMT+7)
+  configTime(7 * 3600, 0, "pool.ntp.org");
+  Serial.println("[NTP] Memulai sinkronisasi waktu...");
+  
+  // Tunggu sinkronisasi NTP selesai (time(nullptr) mengembalikan unix timestamp valid)
+  time_t now = time(nullptr);
+  int ntpTimeout = 0;
+  while (now < 1000000000 && ntpTimeout < 20)
+  {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+    ntpTimeout++;
+  }
+  Serial.println();
+  if (now >= 1000000000) {
+    Serial.print("[NTP] Waktu tersinkronisasi: ");
+    Serial.println(ctime(&now));
+  } else {
+    Serial.println("[WARN] Gagal mendapatkan waktu NTP (Timeout).");
+  }
 
   // Inisialisasi Konfigurasi Firebase
   config.host = FIREBASE_HOST;
