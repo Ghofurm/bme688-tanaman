@@ -46,7 +46,15 @@
 <body class="text-agri-textPrimary min-h-screen flex flex-col py-10 px-4">
 
   <!-- Header -->
-  <header class="text-center mb-10">
+  <header class="text-center mb-10 relative">
+    <div class="absolute top-0 right-0 flex items-center gap-2">
+      <div id="auth-status-container" class="flex items-center gap-2 text-sm bg-white border border-emerald-900/5 px-4 py-2 rounded-xl shadow-sm">
+        <span id="user-email-display" class="text-agri-textSecondary font-medium hidden"></span>
+        <button id="auth-btn" onclick="handleAuthAction()" class="bg-agri-primary hover:bg-emerald-800 text-white font-bold py-1.5 px-4 rounded-lg transition-all duration-300 active:scale-95 text-xs">
+          🔒 Login
+        </button>
+      </div>
+    </div>
     <span class="text-agri-accent text-xs font-bold uppercase tracking-widest block mb-2">Precision Agriculture Platform</span>
     <h1 class="text-3xl md:text-5xl font-bold text-agri-primary flex items-center justify-center gap-2">
       Botanical Precision Agritech 🌿
@@ -60,9 +68,12 @@
     <!-- Top Action Bar -->
     <div class="flex justify-between items-center bg-white border border-emerald-900/5 p-4 rounded-2xl shadow-[0_2px_12px_rgba(46,90,68,0.05)]">
       <h2 class="text-xl font-bold text-agri-primary">Daftar Spesimen Tanaman</h2>
-      <button onclick="openModal('add')" class="bg-agri-primary hover:bg-emerald-800 text-white font-bold py-2.5 px-5 rounded-xl transition-all duration-300 active:scale-95 shadow-sm">
+      <button id="add-plant-btn" onclick="openModal('add')" class="bg-agri-primary hover:bg-emerald-800 text-white font-bold py-2.5 px-5 rounded-xl transition-all duration-300 active:scale-95 shadow-sm hidden">
         + Tambah Tanaman
       </button>
+      <div id="guest-badge" class="text-xs font-medium text-agri-textSecondary bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-1.5">
+        ℹ️ Mode Lihat (Hanya Baca)
+      </div>
     </div>
 
     <!-- Plant Cards Grid -->
@@ -118,6 +129,31 @@
     </div>
   </div>
 
+  <!-- Modal Login -->
+  <div id="login-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+    <div class="bg-white border border-emerald-950/5 rounded-2xl w-full max-w-sm p-6 shadow-2xl m-4 transform scale-95 transition-transform duration-300">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-xl font-bold text-agri-primary">🔒 Login Pengguna</h3>
+        <button onclick="closeLoginModal()" class="text-agri-textSecondary hover:text-agri-textPrimary text-2xl font-bold">&times;</button>
+      </div>
+      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+        <div class="mb-4">
+          <label class="block text-agri-textSecondary text-xs font-bold uppercase tracking-wider mb-2" for="login-email">Email</label>
+          <input type="email" id="login-email" required class="w-full bg-agri-bg border border-emerald-950/10 rounded-xl px-4 py-2.5 text-agri-textPrimary focus:outline-none focus:border-agri-primary transition-colors">
+        </div>
+        <div class="mb-4">
+          <label class="block text-agri-textSecondary text-xs font-bold uppercase tracking-wider mb-2" for="login-password">Password</label>
+          <input type="password" id="login-password" required class="w-full bg-agri-bg border border-emerald-950/10 rounded-xl px-4 py-2.5 text-agri-textPrimary focus:outline-none focus:border-agri-primary transition-colors">
+        </div>
+        <div id="login-error-msg" class="text-xs font-semibold text-rose-500 mb-4 hidden"></div>
+        <div class="flex justify-end gap-3">
+          <button type="button" onclick="closeLoginModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-5 rounded-xl transition-colors">Batal</button>
+          <button type="submit" class="bg-agri-primary hover:bg-emerald-800 text-white font-semibold py-2 px-5 rounded-xl transition-colors shadow-sm">Masuk</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="mt-auto pt-10 text-agri-textSecondary text-xs text-center font-medium">
     © 2026 Botanical Precision Agritech. Platform Pemantauan Ilmiah Sensor BME688.
@@ -126,6 +162,7 @@
   <!-- Firebase JavaScript SDK v8 (compat) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -140,9 +177,14 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const auth = firebase.auth();
+
+    // State Autentikasi Pengguna
+    let currentUser = null;
 
     const plantGrid = document.getElementById('plant-grid');
     const plantModal = document.getElementById('plant-modal');
+    const loginModal = document.getElementById('login-modal');
     const modalForm = document.getElementById('modal-form');
     const modalTitle = document.getElementById('modal-title');
     const modalModeInput = document.getElementById('modal-mode');
@@ -151,6 +193,93 @@
     const plantNameInput = document.getElementById('plant-name');
     const plantDescInput = document.getElementById('plant-desc');
     const plantBenchmarkInput = document.getElementById('plant-benchmark');
+    
+    // Auth DOM
+    const userEmailDisplay = document.getElementById('user-email-display');
+    const authBtn = document.getElementById('auth-btn');
+    const addPlantBtn = document.getElementById('add-plant-btn');
+    const guestBadge = document.getElementById('guest-badge');
+    const loginForm = document.getElementById('login-form');
+    const loginEmailInput = document.getElementById('login-email');
+    const loginPasswordInput = document.getElementById('login-password');
+    const loginErrorMsg = document.getElementById('login-error-msg');
+
+    // Mendengarkan Status Autentikasi Firebase
+    auth.onAuthStateChanged((user) => {
+      currentUser = user;
+      updateUIForAuth();
+      // Pemicu render ulang agar tombol CRUD disembunyikan/ditampilkan
+      db.ref('/tanaman_list').once('value').then((snapshot) => {
+        renderPlantCards(snapshot.val());
+      });
+    });
+
+    function updateUIForAuth() {
+      if (currentUser) {
+        userEmailDisplay.innerText = currentUser.email;
+        userEmailDisplay.classList.remove('hidden');
+        authBtn.innerText = "🔓 Logout";
+        addPlantBtn.classList.remove('hidden');
+        guestBadge.classList.add('hidden');
+      } else {
+        userEmailDisplay.innerText = "";
+        userEmailDisplay.classList.add('hidden');
+        authBtn.innerText = "🔒 Login";
+        addPlantBtn.classList.add('hidden');
+        guestBadge.classList.remove('hidden');
+      }
+    }
+
+    function handleAuthAction() {
+      if (currentUser) {
+        // Logout
+        auth.signOut().then(() => {
+          alert("Anda telah keluar.");
+        }).catch((err) => {
+          alert("Gagal logout: " + err.message);
+        });
+      } else {
+        // Tampilkan modal login
+        openLoginModal();
+      }
+    }
+
+    function openLoginModal() {
+      loginErrorMsg.innerText = "";
+      loginErrorMsg.classList.add('hidden');
+      loginEmailInput.value = "";
+      loginPasswordInput.value = "";
+      loginModal.classList.remove('hidden');
+      setTimeout(() => {
+        loginModal.classList.remove('opacity-0');
+        loginModal.querySelector('div').classList.remove('scale-95');
+      }, 50);
+    }
+
+    function closeLoginModal() {
+      loginModal.classList.add('opacity-0');
+      loginModal.querySelector('div').classList.add('scale-95');
+      setTimeout(() => {
+        loginModal.classList.add('hidden');
+      }, 300);
+    }
+
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+      const email = loginEmailInput.value.trim();
+      const password = loginPasswordInput.value;
+
+      loginErrorMsg.classList.add('hidden');
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          closeLoginModal();
+        })
+        .catch((error) => {
+          loginErrorMsg.innerText = "Email atau password salah! " + error.message;
+          loginErrorMsg.classList.remove('hidden');
+        });
+    }
 
     db.ref('/tanaman_list').on('value', (snapshot) => {
       const data = snapshot.val();
@@ -165,7 +294,7 @@
         plantGrid.innerHTML = `
           <div class="col-span-full text-center py-10 text-agri-textSecondary bg-white rounded-2xl shadow-[0_2px_12px_rgba(46,90,68,0.05)] border border-emerald-950/5 p-6">
             <p class="text-lg font-bold mb-2">Belum ada spesimen tanaman terdaftar.</p>
-            <p class="text-sm">Klik tombol "+ Tambah Tanaman" untuk menambahkan.</p>
+            <p class="text-sm">Silakan hubungi administrator jika Anda merasa ini adalah kesalahan.</p>
           </div>
         `;
         return;
@@ -207,6 +336,48 @@
           } else {
             timeString = `Detik ke-${ts} (Sesi Dingin)`;
           }
+        }
+
+        // Kontrol UI berdasarkan login
+        let controlSection = '';
+        if (currentUser) {
+          controlSection = `
+            <div class="border-t border-gray-100 pt-4 flex flex-col gap-3">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked, '${deviceId}')" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-agri-primary"></div>
+                  </label>
+                  <span class="text-xs text-agri-textSecondary font-bold">${isActive ? 'Aktif' : 'Mati'}</span>
+                </div>
+
+                <div class="flex gap-2">
+                  <button onclick="editPlant('${id}', '${p.nama}', '${p.deskripsi || ''}', ${benchmark}, '${deviceId}')" class="text-xs font-bold text-agri-primary hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+                    Edit
+                  </button>
+                  <button onclick="deletePlant('${id}', '${p.nama}')" class="text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 px-3 py-1.5 rounded-lg transition-colors">
+                    Hapus
+                  </button>
+                </div>
+              </div>
+              <div class="text-[9px] text-agri-textSecondary text-right italic font-medium">
+                Pembaruan: ${timeString}
+              </div>
+            </div>
+          `;
+        } else {
+          controlSection = `
+            <div class="border-t border-gray-100 pt-4 flex flex-col gap-1">
+              <div class="flex justify-between items-center text-xs text-agri-textSecondary">
+                <span>Status Aktif Sensor:</span>
+                <span class="font-bold text-agri-primary">${isActive ? 'Aktif' : 'Standby'}</span>
+              </div>
+              <div class="text-[9px] text-agri-textSecondary text-right italic font-medium">
+                Pembaruan: ${timeString}
+              </div>
+            </div>
+          `;
         }
 
         htmlContent += `
@@ -257,30 +428,7 @@
                 </div>
               </div>
             </div>
-
-            <div class="border-t border-gray-100 pt-4 flex flex-col gap-3">
-              <div class="flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked, '${deviceId}')" class="sr-only peer">
-                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-agri-primary"></div>
-                  </label>
-                  <span class="text-xs text-agri-textSecondary font-bold">${isActive ? 'AKtif' : 'Mati'}</span>
-                </div>
-
-                <div class="flex gap-2">
-                  <button onclick="editPlant('${id}', '${p.nama}', '${p.deskripsi || ''}', ${benchmark}, '${deviceId}')" class="text-xs font-bold text-agri-primary hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
-                    Edit
-                  </button>
-                  <button onclick="deletePlant('${id}', '${p.nama}')" class="text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 px-3 py-1.5 rounded-lg transition-colors">
-                    Hapus
-                  </button>
-                </div>
-              </div>
-              <div class="text-[9px] text-agri-textSecondary text-right italic font-medium">
-                Pembaruan: ${timeString}
-              </div>
-            </div>
+            ${controlSection}
           </div>
         `;
       });
@@ -288,6 +436,10 @@
     }
 
     function openModal(mode, id = '', name = '', desc = '', benchmark = '', deviceId = 'esp32_sensor_01') {
+      if (!currentUser) {
+        alert("Akses ditolak: Silakan login terlebih dahulu.");
+        return;
+      }
       modalModeInput.value = mode;
       if (mode === 'add') {
         modalTitle.innerText = "Tambah Spesimen Baru";
@@ -322,6 +474,10 @@
     }
 
     function toggleSensor(id, checked, deviceId) {
+      if (!currentUser) {
+        alert("Akses ditolak: Silakan login terlebih dahulu.");
+        return;
+      }
       if (checked) {
         db.ref('/tanaman_list').once('value').then((snapshot) => {
           const plants = snapshot.val() || {};
@@ -353,6 +509,10 @@
     }
 
     function deletePlant(id, name) {
+      if (!currentUser) {
+        alert("Akses ditolak: Silakan login terlebih dahulu.");
+        return;
+      }
       if (confirm(`Apakah Anda yakin ingin menghapus data tanaman "${name}" (${id})?`)) {
         db.ref(`/tanaman_list/${id}`).once('value').then((snapshot) => {
           const data = snapshot.val() || {};
@@ -374,11 +534,19 @@
     }
 
     function editPlant(id, name, desc, benchmark, deviceId) {
+      if (!currentUser) {
+        alert("Akses ditolak: Silakan login terlebih dahulu.");
+        return;
+      }
       openModal('edit', id, name, desc, benchmark, deviceId);
     }
 
     function handleFormSubmit(event) {
       event.preventDefault();
+      if (!currentUser) {
+        alert("Akses ditolak: Silakan login terlebih dahulu.");
+        return;
+      }
       const mode = modalModeInput.value;
       const id = plantIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "");
       const deviceId = deviceIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "");
