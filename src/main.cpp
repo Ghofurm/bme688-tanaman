@@ -284,19 +284,60 @@ void loop()
     // Jalankan proses sensor hanya jika targetTanamanID tidak kosong
     if (targetTanamanID != "" && firebaseFailCount == 0)
     {
-      String pathStatus = String("/tanaman_list/") + targetTanamanID + "/status_sensor_aktif";
-      Serial.print("[Firebase] Mengecek status aktif sensor di ");
-      Serial.println(pathStatus);
+      // Baca status aktif dan parameter timer dari Firebase
+      bool success = true;
+      int statusVal = 0;
+      int timerDuration = 0;
+      int timerStart = 0;
 
-      if (Firebase.getInt(fbdo, pathStatus.c_str()))
+      String pathStatus = String("/tanaman_list/") + targetTanamanID + "/status_sensor_aktif";
+      if (Firebase.getInt(fbdo, pathStatus.c_str())) {
+        statusVal = fbdo.intData();
+      } else {
+        success = false;
+      }
+
+      String pathTimerDuration = String("/tanaman_list/") + targetTanamanID + "/sensor_timer_duration";
+      if (Firebase.getInt(fbdo, pathTimerDuration.c_str())) {
+        timerDuration = fbdo.intData();
+      } else {
+        timerDuration = 0; // Default
+      }
+
+      String pathTimerStart = String("/tanaman_list/") + targetTanamanID + "/sensor_timer_start";
+      if (Firebase.getInt(fbdo, pathTimerStart.c_str())) {
+        timerStart = fbdo.intData();
+      } else {
+        timerStart = 0; // Default
+      }
+
+      if (success)
       {
-        int statusVal = fbdo.intData();
+        // Cek jika timer aktif dan waktu sudah habis
+        if (statusVal == 1 && timerDuration > 0 && timerStart > 0)
+        {
+          time_t now = time(nullptr);
+          if (now >= (timerStart + timerDuration))
+          {
+            Serial.println("[Timer] Waktu habis! Mematikan sensor...");
+            statusVal = 0;
+            
+            // Update status di Firebase
+            Firebase.setInt(fbdo, pathStatus.c_str(), 0);
+            Firebase.setInt(fbdo, pathTimerDuration.c_str(), 0);
+            Firebase.setInt(fbdo, pathTimerStart.c_str(), 0);
+            
+            // Update pemetaan perangkat (opsional, tergantung logic)
+            String pathDeviceMapping = String("/devices/") + DEVICE_ID + "/target_tanaman_id";
+            Firebase.setString(fbdo, pathDeviceMapping.c_str(), "");
+          }
+        }
 
         if (statusVal == 0)
         {
           if (isSensorInitialized)
           {
-            Serial.println("Sensor dimatikan jarak jauh. Standby mode...");
+            Serial.println("Sensor dimatikan. Standby mode...");
             isSensorInitialized = false;
           }
         }
@@ -338,7 +379,7 @@ void loop()
       }
       else
       {
-        Serial.print("[Firebase] Gagal membaca status aktif. Alasan: ");
+        Serial.print("[Firebase] Gagal membaca status dari database. Alasan: ");
         Serial.println(fbdo.errorReason());
         firebaseFailCount++;
       }
