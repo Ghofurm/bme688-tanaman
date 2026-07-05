@@ -191,6 +191,48 @@
         </div>
       </form>
     </div>
+    <!-- Modal Timer / Durasi Sensor -->
+  <div id="timer-modal"
+    class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+    <div
+      class="bg-white border border-emerald-950/5 rounded-2xl w-full max-w-sm p-6 shadow-2xl m-4 transform scale-95 transition-transform duration-300">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-agri-primary">⏱️ Set Durasi Sensor</h3>
+        <button onclick="closeTimerModal()"
+          class="text-agri-textSecondary hover:text-agri-textPrimary text-2xl font-bold">&times;</button>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-agri-textSecondary text-[10px] font-bold uppercase tracking-wider mb-2">Pilih Template Durasi</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="selectTemplateTimer(900)" class="bg-gray-50 hover:bg-emerald-50 hover:text-agri-primary text-xs font-semibold py-2 px-3 rounded-lg border border-gray-150 transition-colors">15 Menit</button>
+          <button onclick="selectTemplateTimer(1800)" class="bg-gray-50 hover:bg-emerald-50 hover:text-agri-primary text-xs font-semibold py-2 px-3 rounded-lg border border-gray-150 transition-colors">30 Menit</button>
+          <button onclick="selectTemplateTimer(3600)" class="bg-gray-50 hover:bg-emerald-50 hover:text-agri-primary text-xs font-semibold py-2 px-3 rounded-lg border border-gray-150 transition-colors">1 Jam</button>
+          <button onclick="selectTemplateTimer(7200)" class="bg-gray-50 hover:bg-emerald-50 hover:text-agri-primary text-xs font-semibold py-2 px-3 rounded-lg border border-gray-150 transition-colors">2 Jam</button>
+          <button onclick="selectTemplateTimer(21600)" class="bg-gray-50 hover:bg-emerald-50 hover:text-agri-primary text-xs font-semibold py-2 px-3 rounded-lg border border-gray-150 transition-colors">6 Jam</button>
+          <button onclick="selectTemplateTimer(0)" class="bg-gray-50 hover:bg-emerald-50 hover:text-agri-primary text-xs font-bold py-2 px-3 rounded-lg border border-gray-150 transition-colors text-emerald-700">∞ Manual</button>
+        </div>
+      </div>
+
+      <div class="mb-5 border-t border-gray-100 pt-4">
+        <label class="block text-agri-textSecondary text-[10px] font-bold uppercase tracking-wider mb-2">Input Manual (Jam & Menit)</label>
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <input type="number" id="timer-hours" min="0" max="23" value="0" class="w-full bg-agri-bg border border-emerald-950/10 rounded-xl px-3 py-2 text-sm text-center text-agri-textPrimary font-semibold focus:outline-none focus:border-agri-primary">
+            <span class="block text-center text-[10px] text-agri-textSecondary mt-1">Jam</span>
+          </div>
+          <div class="flex-1">
+            <input type="number" id="timer-minutes" min="0" max="59" value="15" class="w-full bg-agri-bg border border-emerald-950/10 rounded-xl px-3 py-2 text-sm text-center text-agri-textPrimary font-semibold focus:outline-none focus:border-agri-primary">
+            <span class="block text-center text-[10px] text-agri-textSecondary mt-1">Menit</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="closeTimerModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-xl transition-colors text-sm">Batal</button>
+        <button onclick="submitTimer()" class="flex-1 bg-agri-primary hover:bg-emerald-800 text-white font-semibold py-2 px-4 rounded-xl transition-colors shadow-sm text-sm">Mulai Aktifkan</button>
+      </div>
+    </div>
   </div>
 
   <!-- Footer -->
@@ -224,6 +266,7 @@
     const plantGrid = document.getElementById('plant-grid');
     const plantModal = document.getElementById('plant-modal');
     const loginModal = document.getElementById('login-modal');
+    const timerModal = document.getElementById('timer-modal');
     const modalForm = document.getElementById('modal-form');
     const modalTitle = document.getElementById('modal-title');
     const modalModeInput = document.getElementById('modal-mode');
@@ -232,6 +275,10 @@
     const plantNameInput = document.getElementById('plant-name');
     const plantDescInput = document.getElementById('plant-desc');
     const plantBenchmarkInput = document.getElementById('plant-benchmark');
+
+    // Timer modal state
+    let activeTimerPlantId = '';
+    let activeTimerDeviceId = '';
 
     // Auth DOM
     const userEmailDisplay = document.getElementById('user-email-display');
@@ -242,6 +289,9 @@
     const loginEmailInput = document.getElementById('login-email');
     const loginPasswordInput = document.getElementById('login-password');
     const loginErrorMsg = document.getElementById('login-error-msg');
+
+    // Keep track of registered countdown intervals to clear them on re-render
+    let countdownIntervals = [];
 
     // Mendengarkan Status Autentikasi Firebase
     auth.onAuthStateChanged((user) => {
@@ -257,7 +307,7 @@
       if (currentUser) {
         userEmailDisplay.innerText = currentUser.email;
         userEmailDisplay.classList.remove('hidden');
-        authBtn.innerText = "🔓 Logout";
+        authBtn.innerText = "🚪 Logout";
         addPlantBtn.classList.remove('hidden');
         guestBadge.classList.add('hidden');
       } else {
@@ -329,6 +379,10 @@
     });
 
     function renderPlantCards(plants) {
+      // Clear previous countdown intervals
+      countdownIntervals.forEach(clearInterval);
+      countdownIntervals = [];
+
       if (!plants) {
         plantGrid.innerHTML = `
           <div class="col-span-full text-center py-10 text-agri-textSecondary bg-white rounded-2xl shadow-[0_2px_12px_rgba(46,90,68,0.05)] border border-emerald-950/5 p-6">
@@ -347,6 +401,10 @@
         const benchmark = parseFloat(p.benchmark_gas) || 100000;
         const gas = latest.gas_resistance !== undefined ? parseFloat(latest.gas_resistance) : -1;
         const deviceId = p.device_id || 'esp32_sensor_01';
+        
+        // Timer properties
+        const timerDuration = p.sensor_timer_duration !== undefined ? parseInt(p.sensor_timer_duration) : 0;
+        const timerStart = p.sensor_timer_start !== undefined ? parseInt(p.sensor_timer_start) : 0;
 
         let statusBadge = '';
         if (!isActive) {
@@ -365,6 +423,8 @@
         const gasLogText = (latest.gas_log !== undefined && latest.gas_log !== -1) ? parseFloat(latest.gas_log).toFixed(2) : '--';
         const gasDeltaText = latest.gas_delta !== undefined ? `${parseFloat(latest.gas_delta).toLocaleString('id-ID')} Ω` : '--';
         const absHumText = latest.abs_humidity !== undefined ? `${parseFloat(latest.abs_humidity).toFixed(1)} g/m³` : '--';
+        const absHumLabel = "Abs. Humidity:";
+        const gasDeltaLabel = "Gas Delta:";
 
         let timeString = '--';
         if (latest.timestamp !== undefined) {
@@ -377,6 +437,50 @@
           }
         }
 
+        // Timer/Countdown section
+        let timerSectionHtml = '';
+        if (isActive) {
+          if (timerDuration > 0) {
+            const targetElId = `timer-countdown-${id}`;
+            timerSectionHtml = `
+              <div class="flex justify-between items-center py-0.5 mt-0.5 text-xs">
+                <span class="text-agri-textSecondary">Sisa Waktu:</span>
+                <span id="${targetElId}" class="font-bold text-amber-600 font-mono">Menghitung...</span>
+              </div>
+            `;
+            
+            // Start local counter
+            const intervalId = setInterval(() => {
+              const el = document.getElementById(targetElId);
+              if (!el) return;
+              const nowSec = Math.floor(Date.now() / 1000);
+              const elapsed = nowSec - timerStart;
+              const remaining = timerDuration - elapsed;
+              if (remaining <= 0) {
+                el.innerText = "Waktu Habis (Proses Mati)";
+                el.className = "font-bold text-rose-500 font-mono";
+              } else {
+                const hours = Math.floor(remaining / 3600);
+                const minutes = Math.floor((remaining % 3600) / 60);
+                const seconds = remaining % 60;
+                let formatted = '';
+                if (hours > 0) formatted += `${hours}j `;
+                if (minutes > 0 || hours > 0) formatted += `${minutes}m `;
+                formatted += `${seconds}d`;
+                el.innerText = formatted;
+              }
+            }, 1000);
+            countdownIntervals.push(intervalId);
+          } else {
+            timerSectionHtml = `
+              <div class="flex justify-between items-center py-0.5 mt-0.5 text-xs">
+                <span class="text-agri-textSecondary">Sisa Waktu:</span>
+                <span class="font-semibold text-agri-textSecondary font-mono">∞ Tanpa Batas</span>
+              </div>
+            `;
+          }
+        }
+
         // Kontrol UI berdasarkan login
         let controlSection = '';
         if (currentUser) {
@@ -385,7 +489,7 @@
               <div class="flex justify-between items-center">
                 <div class="flex items-center gap-2">
                   <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked, '${deviceId}')" class="sr-only peer">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="handleSensorToggleClick('${id}', this.checked, '${deviceId}')" class="sr-only peer">
                     <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-agri-primary"></div>
                   </label>
                   <span class="text-xs text-agri-textSecondary font-bold">${isActive ? 'Aktif' : 'Mati'}</span>
@@ -454,17 +558,18 @@
                   </div>
                 </div>
                 <div class="flex justify-between items-center py-0.5">
-                  <span class="text-agri-textSecondary text-xs">Gas Delta:</span>
+                  <span class="text-agri-textSecondary text-xs">${gasDeltaLabel}</span>
                   <span class="font-semibold text-agri-accent font-mono text-xs">${gasDeltaText}</span>
                 </div>
                 <div class="flex justify-between items-center py-0.5">
-                  <span class="text-agri-textSecondary text-xs">Abs. Humidity:</span>
+                  <span class="text-agri-textSecondary text-xs">${absHumLabel}</span>
                   <span class="font-semibold text-agri-textPrimary font-mono text-xs">${absHumText}</span>
                 </div>
                 <div class="flex justify-between items-center py-0.5">
                   <span class="text-agri-textSecondary text-xs">Benchmark Gas:</span>
                   <span class="font-semibold text-agri-textPrimary font-mono text-xs">${benchmark.toLocaleString('id-ID')} Ω</span>
                 </div>
+                ${timerSectionHtml}
               </div>
             </div>
             ${controlSection}
@@ -512,17 +617,94 @@
       }, 300);
     }
 
-    function toggleSensor(id, checked, deviceId) {
+    // Timer Modal Controls
+    function openTimerModal(plantId, deviceId) {
+      activeTimerPlantId = plantId;
+      activeTimerDeviceId = deviceId;
+      document.getElementById('timer-hours').value = 0;
+      document.getElementById('timer-minutes').value = 15;
+      
+      timerModal.classList.remove('hidden');
+      setTimeout(() => {
+        timerModal.classList.remove('opacity-0');
+        timerModal.querySelector('div').classList.remove('scale-95');
+      }, 50);
+    }
+
+    function closeTimerModal() {
+      timerModal.classList.add('opacity-0');
+      timerModal.querySelector('div').classList.add('scale-95');
+      setTimeout(() => {
+        timerModal.classList.add('hidden');
+      }, 300);
+      
+      // Reset checkbox to unchecked if they cancel activating
+      db.ref('/tanaman_list').once('value').then((snapshot) => {
+        renderPlantCards(snapshot.val());
+      });
+    }
+
+    function selectTemplateTimer(seconds) {
+      if (seconds === 0) {
+        // Unlimited
+        executeToggleSensor(activeTimerPlantId, true, activeTimerDeviceId, 0);
+        closeTimerModal();
+      } else {
+        executeToggleSensor(activeTimerPlantId, true, activeTimerDeviceId, seconds);
+        closeTimerModal();
+      }
+    }
+
+    function submitTimer() {
+      const hours = parseInt(document.getElementById('timer-hours').value) || 0;
+      const minutes = parseInt(document.getElementById('timer-minutes').value) || 0;
+      
+      if (hours < 0 || minutes < 0) {
+        alert("Durasi waktu tidak boleh negatif!");
+        return;
+      }
+      
+      const totalSeconds = (hours * 3600) + (minutes * 60);
+      if (totalSeconds === 0) {
+        alert("Durasi waktu minimal 1 menit, atau pilih template Manual (Tanpa Batas)!");
+        return;
+      }
+      
+      executeToggleSensor(activeTimerPlantId, true, activeTimerDeviceId, totalSeconds);
+      closeTimerModal();
+    }
+
+    function handleSensorToggleClick(id, checked, deviceId) {
       if (!currentUser) {
         alert("Akses ditolak: Silakan login terlebih dahulu.");
         return;
       }
       if (checked) {
+        // Open duration popup modal
+        openTimerModal(id, deviceId);
+      } else {
+        // Directly turn off
+        executeToggleSensor(id, false, deviceId, 0);
+      }
+    }
+
+    function executeToggleSensor(id, checked, deviceId, durationSeconds) {
+      if (checked) {
         db.ref('/tanaman_list').once('value').then((snapshot) => {
           const plants = snapshot.val() || {};
           const updates = {};
+          const nowTimestamp = Math.floor(Date.now() / 1000);
+          
           Object.keys(plants).forEach((key) => {
-            updates[`/tanaman_list/${key}/status_sensor_aktif`] = (key === id) ? 1 : 0;
+            const isTarget = (key === id);
+            updates[`/tanaman_list/${key}/status_sensor_aktif`] = isTarget ? 1 : 0;
+            if (isTarget) {
+              updates[`/tanaman_list/${key}/sensor_timer_duration`] = durationSeconds;
+              updates[`/tanaman_list/${key}/sensor_timer_start`] = nowTimestamp;
+            } else {
+              updates[`/tanaman_list/${key}/sensor_timer_duration`] = 0;
+              updates[`/tanaman_list/${key}/sensor_timer_start`] = 0;
+            }
             const otherDeviceId = plants[key].device_id;
             if (otherDeviceId && key !== id) {
               updates[`/devices/${otherDeviceId}/target_tanaman_id`] = "";
@@ -538,6 +720,8 @@
       } else {
         const updates = {};
         updates[`/tanaman_list/${id}/status_sensor_aktif`] = 0;
+        updates[`/tanaman_list/${id}/sensor_timer_duration`] = 0;
+        updates[`/tanaman_list/${id}/sensor_timer_start`] = 0;
         if (deviceId) {
           updates[`/devices/${deviceId}/target_tanaman_id`] = "";
         }
@@ -608,7 +792,9 @@
               deskripsi: desc,
               benchmark_gas: benchmark,
               device_id: deviceId,
-              status_sensor_aktif: 0
+              status_sensor_aktif: 0,
+              sensor_timer_duration: 0,
+              sensor_timer_start: 0
             }).then(() => {
               closeModal();
             }).catch(err => {
