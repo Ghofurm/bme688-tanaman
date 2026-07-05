@@ -21,6 +21,105 @@ bool isSensorInitialized = false;         // Flag inisialisasi sensor
 String targetTanamanID = "";              // ID Tanaman target yang didapat dinamis dari Firebase
 float benchmarkGas = 100000.0;            // Default benchmark gas
 
+// Variabel untuk melacak status koneksi
+int firebaseFailCount = 0;
+const int maxFirebaseFails = 3;
+int currentWiFiIndex = -1;
+
+// Fungsi untuk sinkronisasi NTP
+void syncNTP()
+{
+  configTime(7 * 3600, 0, "pool.ntp.org");
+  Serial.println("[NTP] Memulai sinkronisasi waktu...");
+  
+  time_t now = time(nullptr);
+  int ntpTimeout = 0;
+  while (now < 1000000000 && ntpTimeout < 20)
+  {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+    ntpTimeout++;
+  }
+  Serial.println();
+  if (now >= 1000000000) {
+    Serial.print("[NTP] Waktu tersinkronisasi: ");
+    Serial.println(ctime(&now));
+  } else {
+    Serial.println("[WARN] Gagal mendapatkan waktu NTP (Timeout).");
+  }
+}
+
+// Fungsi untuk mencari dan menghubungkan ke WiFi terbaik yang tersedia
+bool connectToBestWiFi()
+{
+  Serial.println("[WiFi] Melakukan scanning jaringan...");
+  int n = WiFi.scanNetworks();
+  Serial.printf("[WiFi] Scan selesai, %d jaringan ditemukan.\n", n);
+
+  if (n == 0)
+  {
+    Serial.println("[WiFi] Tidak ada jaringan WiFi yang ditemukan.");
+    return false;
+  }
+
+  // Cari WiFi dari WIFI_LIST yang ada di hasil scan
+  for (int i = 0; i < WIFI_COUNT; i++)
+  {
+    for (int j = 0; j < n; j++)
+    {
+      if (WiFi.SSID(j) == WIFI_LIST[i].ssid)
+      {
+        Serial.printf("[WiFi] Menemukan jaringan cocok: %s. Mencoba menghubungkan...\n", WIFI_LIST[i].ssid);
+        
+        WiFi.disconnect();
+        WiFi.begin(WIFI_LIST[i].ssid, WIFI_LIST[i].password);
+
+        // Tunggu koneksi
+        int retries = 0;
+        while (WiFi.status() != WL_CONNECTED && retries < 20)
+        {
+          delay(500);
+          Serial.print(".");
+          retries++;
+        }
+        Serial.println();
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
+          currentWiFiIndex = i;
+          Serial.printf("[WiFi] Berhasil terhubung ke: %s!\n", WIFI_LIST[i].ssid);
+          Serial.print("[WiFi] IP Address: ");
+          Serial.println(WiFi.localIP());
+          syncNTP();
+          return true;
+        }
+        else
+        {
+          Serial.printf("[WiFi] Gagal terhubung ke: %s\n", WIFI_LIST[i].ssid);
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+// Fallback jika tidak ada WiFi dari WIFI_LIST yang terhubung
+void startFallbackPortal()
+{
+  Serial.println("[WiFi] Memulai WiFiManager Captive Portal sebagai fallback...");
+  WiFiManager wm;
+  // autoConnect akan memblokir sampai terhubung ke WiFi baru via AP Portal
+  if (wm.autoConnect("Smart-Plant-Monitor"))
+  {
+    Serial.println("[WiFi] Terhubung via WiFiManager!");
+    Serial.print("[WiFi] IP Address: ");
+    Serial.println(WiFi.localIP());
+    syncNTP();
+  }
+}
+
 // Fungsi untuk menginisialisasi sensor BME688
 bool initializeSensor()
 {
@@ -42,18 +141,18 @@ bool initializeSensor()
 }
 
 // Fungsi untuk mengirim data sensor ke Firebase Realtime Database
-void sendDataToFirebase(float temp, float hum, float pres, float gas)
+bool sendDataToFirebase(float temp, float hum, float pres, float gas)
 {
   if (WiFi.status() != WL_CONNECTED)
   {
     Serial.println("[Firebase] Gagal mengirim, WiFi tidak terhubung.");
-    return;
+    return false;
   }
 
   if (targetTanamanID == "")
   {
     Serial.println("[Firebase] Gagal mengirim, ID tanaman target belum diset.");
-    return;
+    return false;
   }
 
   // A. Ambil nilai benchmark_gas dari Firebase
@@ -67,6 +166,7 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   {
     Serial.print("[Firebase] Gagal mengambil benchmark_gas. Menggunakan default. Alasan: ");
     Serial.println(fbdo.errorReason());
+    return false;
   }
 
   // B. Hitung parameter ilmiah / feature engineering
@@ -90,30 +190,27 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   Serial.print("[Firebase] Mengupdate data terkini di ");
   Serial.println(pathTerakhir);
 
-  if (Firebase.setJSON(fbdo, pathTerakhir.c_str(), json))
-  {
-    Serial.println("[Firebase] Data terkini berhasil diperbarui!");
-  }
-  else
+  if (!Firebase.setJSON(fbdo, pathTerakhir.c_str(), json))
   {
     Serial.print("[Firebase] Gagal update data terkini. Alasan: ");
     Serial.println(fbdo.errorReason());
+    return false;
   }
+  Serial.println("[Firebase] Data terkini berhasil diperbarui!");
 
   // 2) Simpan ke history (append)
   String pathHistory = String("/tanaman_list/") + targetTanamanID + "/history_data";
   Serial.print("[Firebase] Menambahkan history data ke ");
   Serial.println(pathHistory);
 
-  if (Firebase.pushJSON(fbdo, pathHistory.c_str(), json))
-  {
-    Serial.println("[Firebase] History data berhasil ditambahkan!");
-  }
-  else
+  if (!Firebase.pushJSON(fbdo, pathHistory.c_str(), json))
   {
     Serial.print("[Firebase] Gagal push history. Alasan: ");
     Serial.println(fbdo.errorReason());
+    return false;
   }
+  Serial.println("[Firebase] History data berhasil ditambahkan!");
+  return true;
 }
 
 void setup()
@@ -123,34 +220,16 @@ void setup()
 
   Serial.println("=== BME688 & Firebase Project ===");
 
-  // WiFiManager: otomatis konek atau buka captive portal
-  WiFiManager wm;
-  wm.autoConnect("Smart-Plant-Monitor");
+  // Set mode WiFi station
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
 
-  Serial.println("[WiFi] Terhubung via WiFiManager!");
-  Serial.print("[WiFi] IP Address: ");
-  Serial.println(WiFi.localIP());
-
-  // NTP Server Config (timezone Asia/Jakarta GMT+7)
-  configTime(7 * 3600, 0, "pool.ntp.org");
-  Serial.println("[NTP] Memulai sinkronisasi waktu...");
-  
-  // Tunggu sinkronisasi NTP selesai (time(nullptr) mengembalikan unix timestamp valid)
-  time_t now = time(nullptr);
-  int ntpTimeout = 0;
-  while (now < 1000000000 && ntpTimeout < 20)
+  // Mulai koneksi ke WiFi terbaik dari daftar
+  if (!connectToBestWiFi())
   {
-    delay(500);
-    Serial.print(".");
-    now = time(nullptr);
-    ntpTimeout++;
-  }
-  Serial.println();
-  if (now >= 1000000000) {
-    Serial.print("[NTP] Waktu tersinkronisasi: ");
-    Serial.println(ctime(&now));
-  } else {
-    Serial.println("[WARN] Gagal mendapatkan waktu NTP (Timeout).");
+    // Jika tidak ada WiFi dari daftar yang terhubung, gunakan WiFiManager
+    startFallbackPortal();
   }
 
   // Inisialisasi Konfigurasi Firebase
@@ -167,87 +246,117 @@ void loop()
 {
   unsigned long currentMillis = millis();
 
+  // Pastikan koneksi WiFi tetap aktif
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("[WiFi] Koneksi terputus! Mencoba menghubungkan kembali...");
+    if (!connectToBestWiFi())
+    {
+      // Berikan jeda agar tidak spam scan jika semua WiFi mati
+      delay(5000);
+      return;
+    }
+  }
+
   // Jalankan logika pembacaan status dan data sensor setiap 15 detik
   if (currentMillis - lastSendTime >= sendInterval)
   {
     lastSendTime = currentMillis;
 
-    if (WiFi.status() == WL_CONNECTED)
+    // A. Ambil ID Tanaman target secara dinamis dari Firebase terlebih dahulu
+    String pathDeviceMapping = String("/devices/") + DEVICE_ID + "/target_tanaman_id";
+    Serial.print("[Firebase] Mendapatkan target tanaman dari ");
+    Serial.println(pathDeviceMapping);
+
+    if (Firebase.getString(fbdo, pathDeviceMapping.c_str()))
     {
-      // A. Ambil ID Tanaman target secara dinamis dari Firebase terlebih dahulu
-      String pathDeviceMapping = String("/devices/") + DEVICE_ID + "/target_tanaman_id";
-      Serial.print("[Firebase] Mendapatkan target tanaman dari ");
-      Serial.println(pathDeviceMapping);
+      targetTanamanID = fbdo.stringData();
+      Serial.printf("[Firebase] Device dipetakan ke ID tanaman: %s\n", targetTanamanID.c_str());
+      firebaseFailCount = 0; // Reset counter karena berhasil terkoneksi ke Firebase
+    }
+    else
+    {
+      Serial.print("[Firebase] Gagal mendapatkan target tanaman. Alasan: ");
+      Serial.println(fbdo.errorReason());
+      firebaseFailCount++;
+    }
 
-      if (Firebase.getString(fbdo, pathDeviceMapping.c_str()))
-      {
-        targetTanamanID = fbdo.stringData();
-        Serial.printf("[Firebase] Device dipetakan ke ID tanaman: %s\n", targetTanamanID.c_str());
-      }
-      else
-      {
-        Serial.print("[Firebase] Gagal mendapatkan target tanaman. Alasan: ");
-        Serial.println(fbdo.errorReason());
-      }
+    // Jalankan proses sensor hanya jika targetTanamanID tidak kosong
+    if (targetTanamanID != "" && firebaseFailCount == 0)
+    {
+      String pathStatus = String("/tanaman_list/") + targetTanamanID + "/status_sensor_aktif";
+      Serial.print("[Firebase] Mengecek status aktif sensor di ");
+      Serial.println(pathStatus);
 
-      // Jalankan proses sensor hanya jika targetTanamanID tidak kosong
-      if (targetTanamanID != "")
+      if (Firebase.getInt(fbdo, pathStatus.c_str()))
       {
-        String pathStatus = String("/tanaman_list/") + targetTanamanID + "/status_sensor_aktif";
-        Serial.print("[Firebase] Mengecek status aktif sensor di ");
-        Serial.println(pathStatus);
+        int statusVal = fbdo.intData();
 
-        if (Firebase.getInt(fbdo, pathStatus.c_str()))
+        if (statusVal == 0)
         {
-          int statusVal = fbdo.intData();
-
-          if (statusVal == 0)
+          if (isSensorInitialized)
           {
-            if (isSensorInitialized)
+            Serial.println("Sensor dimatikan jarak jauh. Standby mode...");
+            isSensorInitialized = false;
+          }
+        }
+        else if (statusVal == 1)
+        {
+          if (!isSensorInitialized)
+          {
+            if (initializeSensor())
             {
-              Serial.println("Sensor dimatikan jarak jauh. Standby mode...");
-              isSensorInitialized = false;
+              isSensorInitialized = true;
             }
           }
-          else if (statusVal == 1)
+
+          // Lakukan pembacaan data sensor & kirim jika sudah diinisialisasi
+          if (isSensorInitialized)
           {
-            if (!isSensorInitialized)
+            if (bme.performReading())
             {
-              if (initializeSensor())
-              {
-                isSensorInitialized = true;
-              }
-            }
+              float temp = bme.temperature;
+              float hum = bme.humidity;
+              float pres = bme.pressure / 100.0;
+              float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
 
-            // Lakukan pembacaan data sensor & kirim jika sudah diinisialisasi
-            if (isSensorInitialized)
-            {
-              if (bme.performReading())
+              if (sendDataToFirebase(temp, hum, pres, gas))
               {
-                float temp = bme.temperature;
-                float hum = bme.humidity;
-                float pres = bme.pressure / 100.0;
-                float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
-
-                sendDataToFirebase(temp, hum, pres, gas);
+                firebaseFailCount = 0; // Reset
               }
               else
               {
-                Serial.println("[ERROR] Gagal membaca sensor BME688.");
+                firebaseFailCount++;
               }
             }
+            else
+            {
+              Serial.println("[ERROR] Gagal membaca sensor BME688.");
+            }
           }
-        }
-        else
-        {
-          Serial.print("[Firebase] Gagal membaca status aktif. Alasan: ");
-          Serial.println(fbdo.errorReason());
         }
       }
       else
       {
-        Serial.println("[WARN] Target tanaman kosong di Firebase. Mode Standby.");
+        Serial.print("[Firebase] Gagal membaca status aktif. Alasan: ");
+        Serial.println(fbdo.errorReason());
+        firebaseFailCount++;
       }
+    }
+    else if (targetTanamanID == "")
+    {
+      Serial.println("[WARN] Target tanaman kosong di Firebase. Mode Standby.");
+    }
+
+    // Jika terjadi kegagalan Firebase berulang kali, kemungkinan WiFi bermasalah/lemot.
+    // Lakukan pemindahan WiFi (Switching).
+    if (firebaseFailCount >= maxFirebaseFails)
+    {
+      Serial.printf("[Firebase] Gagal berturut-turut %d kali. Mengganti WiFi...\n", firebaseFailCount);
+      firebaseFailCount = 0; // Reset counter
+      WiFi.disconnect();
+      delay(500);
+      connectToBestWiFi();
     }
   }
 
@@ -281,4 +390,4 @@ void loop()
     }
     Serial.println("---------------------------");
   }
-}
+}
