@@ -495,17 +495,6 @@
                   <span class="text-xs text-agri-textSecondary font-bold">${isActive ? 'Aktif' : 'Mati'}</span>
                 </div>
 
-                <div class="flex gap-2">
-                  <button onclick="editPlant('${id}', '${p.nama}', '${p.deskripsi || ''}', ${benchmark}, '${deviceId}')" class="text-xs font-bold text-agri-primary hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
-                    Edit
-                  </button>
-                  <button onclick="deletePlant('${id}', '${p.nama}')" class="text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 px-3 py-1.5 rounded-lg transition-colors">
-                    Hapus
-                  </button>
-                </div>
-              </div>
-              <div class="text-[9px] text-agri-textSecondary text-right italic font-medium">
-                Pembaruan: ${timeString}
               </div>
             </div>
           `;
