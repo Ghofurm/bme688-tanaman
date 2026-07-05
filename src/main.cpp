@@ -108,6 +108,12 @@ bool connectToBestWiFi()
 // Fallback jika tidak ada WiFi dari WIFI_LIST yang terhubung
 void startFallbackPortal()
 {
+  Serial.println("[WiFi] Mengatur ulang mode WiFi untuk Captive Portal...");
+  WiFi.disconnect(true);
+  delay(500);
+  WiFi.mode(WIFI_AP_STA);
+  delay(500);
+
   Serial.println("[WiFi] Memulai WiFiManager Captive Portal sebagai fallback...");
   WiFiManager wm;
   // autoConnect akan memblokir sampai terhubung ke WiFi baru via AP Portal
