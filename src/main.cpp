@@ -20,6 +20,7 @@ const unsigned long sendInterval = 15000; // Interval pengiriman/pengecekan data
 bool isSensorInitialized = false;         // Flag inisialisasi sensor
 String targetTanamanID = "";              // ID Tanaman target yang didapat dinamis dari Firebase
 float benchmarkGas = 100000.0;            // Default benchmark gas
+bool hasFetchedBenchmark = false;         // Flag to fetch benchmark only once per plant ID
 
 // Fungsi untuk menginisialisasi sensor BME688
 bool initializeSensor()
@@ -56,17 +57,23 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
     return;
   }
 
-  // A. Ambil nilai benchmark_gas dari Firebase
-  String pathBenchmark = String("/tanaman_list/") + targetTanamanID + "/benchmark_gas";
-  if (Firebase.getDouble(fbdo, pathBenchmark.c_str()))
+  // A. Ambil nilai benchmark_gas dari Firebase jika belum ada
+  if (!hasFetchedBenchmark)
   {
-    benchmarkGas = fbdo.doubleData();
-    Serial.printf("[Firebase] Benchmark Gas: %.2f Ohm\n", benchmarkGas);
-  }
-  else
-  {
-    Serial.print("[Firebase] Gagal mengambil benchmark_gas. Menggunakan default. Alasan: ");
-    Serial.println(fbdo.errorReason());
+    String pathBenchmark = String("/tanaman_list/") + targetTanamanID + "/benchmark_gas";
+    Serial.print("[Firebase] Mengambil benchmark_gas dari ");
+    Serial.println(pathBenchmark);
+    if (Firebase.getDouble(fbdo, pathBenchmark.c_str()))
+    {
+      benchmarkGas = fbdo.doubleData();
+      hasFetchedBenchmark = true;
+      Serial.printf("[Firebase] Benchmark Gas berhasil diambil: %.2f Ohm\n", benchmarkGas);
+    }
+    else
+    {
+      Serial.print("[Firebase] Gagal mengambil benchmark_gas. Menggunakan default. Alasan: ");
+      Serial.println(fbdo.errorReason());
+    }
   }
 
   // B. Hitung parameter ilmiah / feature engineering
@@ -85,34 +92,70 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   json.set("gas_delta", gasDelta);
   json.set("abs_humidity", absHumidity);
 
-  // 1) Update data terkini (overwrite)
+  // 1) Update data terkini (overwrite) dengan retry
   String pathTerakhir = String("/tanaman_list/") + targetTanamanID + "/data_terakhir";
   Serial.print("[Firebase] Mengupdate data terkini di ");
   Serial.println(pathTerakhir);
 
-  if (Firebase.setJSON(fbdo, pathTerakhir.c_str(), json))
+  bool updateSuccess = false;
+  int retryCount = 0;
+  while (retryCount < 2)
+  {
+    if (Firebase.setJSON(fbdo, pathTerakhir.c_str(), json))
+    {
+      updateSuccess = true;
+      break;
+    }
+    retryCount++;
+    Serial.print("[Firebase] Gagal update data terkini. Alasan: ");
+    Serial.println(fbdo.errorReason());
+    if (retryCount < 2)
+    {
+      Serial.println("[Firebase] Mencoba kembali dalam 1.5 detik...");
+      delay(1500);
+    }
+  }
+
+  if (updateSuccess)
   {
     Serial.println("[Firebase] Data terkini berhasil diperbarui!");
   }
   else
   {
-    Serial.print("[Firebase] Gagal update data terkini. Alasan: ");
-    Serial.println(fbdo.errorReason());
+    Serial.println("[Firebase] Gagal update data terkini setelah percobaan ulang.");
   }
 
-  // 2) Simpan ke history (append)
+  // 2) Simpan ke history (append) dengan retry
   String pathHistory = String("/tanaman_list/") + targetTanamanID + "/history_data";
   Serial.print("[Firebase] Menambahkan history data ke ");
   Serial.println(pathHistory);
 
-  if (Firebase.pushJSON(fbdo, pathHistory.c_str(), json))
+  bool pushSuccess = false;
+  retryCount = 0;
+  while (retryCount < 2)
+  {
+    if (Firebase.pushJSON(fbdo, pathHistory.c_str(), json))
+    {
+      pushSuccess = true;
+      break;
+    }
+    retryCount++;
+    Serial.print("[Firebase] Gagal push history. Alasan: ");
+    Serial.println(fbdo.errorReason());
+    if (retryCount < 2)
+    {
+      Serial.println("[Firebase] Mencoba kembali dalam 1.5 detik...");
+      delay(1500);
+    }
+  }
+
+  if (pushSuccess)
   {
     Serial.println("[Firebase] History data berhasil ditambahkan!");
   }
   else
   {
-    Serial.print("[Firebase] Gagal push history. Alasan: ");
-    Serial.println(fbdo.errorReason());
+    Serial.println("[Firebase] Gagal push history setelah percobaan ulang.");
   }
 }
 
@@ -156,6 +199,7 @@ void setup()
   // Inisialisasi Konfigurasi Firebase
   config.host = FIREBASE_HOST;
   config.signer.tokens.legacy_token = FIREBASE_AUTH;
+  config.timeout.serverResponse = 10 * 1000;  // 10 detik (default terlalu pendek)
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
@@ -181,7 +225,12 @@ void loop()
 
       if (Firebase.getString(fbdo, pathDeviceMapping.c_str()))
       {
-        targetTanamanID = fbdo.stringData();
+        String newTanamanID = fbdo.stringData();
+        if (newTanamanID != targetTanamanID)
+        {
+          targetTanamanID = newTanamanID;
+          hasFetchedBenchmark = false; // Reset agar benchmark_gas diambil ulang untuk tanaman baru
+        }
         Serial.printf("[Firebase] Device dipetakan ke ID tanaman: %s\n", targetTanamanID.c_str());
       }
       else
