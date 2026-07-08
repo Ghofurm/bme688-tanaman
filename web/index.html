@@ -182,6 +182,41 @@
     // State Autentikasi Pengguna
     let currentUser = null;
 
+    // State Timer Sensor
+    const timerValues = {}; // id -> nilai input menit
+    const activeTimers = {}; // id -> { endTime, deviceId }
+
+    // Jalankan timer interval secara terpusat setiap detik
+    setInterval(() => {
+      const now = Date.now();
+      Object.keys(activeTimers).forEach((id) => {
+        const timerData = activeTimers[id];
+        const timeLeft = timerData.endTime - now;
+
+        if (timeLeft <= 0) {
+          const deviceId = timerData.deviceId;
+          delete activeTimers[id];
+          const toggleEl = document.getElementById(`toggle-${id}`);
+          if (toggleEl) {
+            toggleEl.checked = false;
+          }
+          toggleSensor(id, false, deviceId);
+        } else {
+          const statusLabel = document.getElementById(`status-label-${id}`);
+          if (statusLabel) {
+            const totalSeconds = Math.ceil(timeLeft / 1000);
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            statusLabel.innerText = `Aktif (${m}:${s < 10 ? '0' : ''}${s})`;
+          }
+        }
+      });
+    }, 1000);
+
+    function updateTimerValue(id, val) {
+      timerValues[id] = val;
+    }
+
     const plantGrid = document.getElementById('plant-grid');
     const plantModal = document.getElementById('plant-modal');
     const loginModal = document.getElementById('login-modal');
@@ -338,18 +373,29 @@
           }
         }
 
+        // Hapus activeTimers lokal jika Firebase menyatakan tidak aktif
+        if (!isActive && activeTimers[id]) {
+          delete activeTimers[id];
+        }
+
         // Kontrol UI berdasarkan login
         let controlSection = '';
         if (currentUser) {
           controlSection = `
             <div class="border-t border-gray-100 pt-4 flex flex-col gap-3">
-              <div class="flex justify-between items-center">
+              <div class="flex justify-between items-center flex-wrap gap-2">
                 <div class="flex items-center gap-2">
                   <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked, '${deviceId}')" class="sr-only peer">
+                    <input type="checkbox" id="toggle-${id}" ${isActive ? 'checked' : ''} onchange="toggleSensor('${id}', this.checked, '${deviceId}')" class="sr-only peer">
                     <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-agri-primary"></div>
                   </label>
-                  <span class="text-xs text-agri-textSecondary font-bold">${isActive ? 'Aktif' : 'Mati'}</span>
+                  <span class="text-xs text-agri-textSecondary font-bold" id="status-label-${id}">${isActive ? 'Aktif' : 'Mati'}</span>
+                </div>
+
+                <!-- Input Timer -->
+                <div class="flex items-center gap-1">
+                  <input type="number" id="timer-${id}" placeholder="Timer" oninput="updateTimerValue('${id}', this.value)" value="${timerValues[id] || ''}" ${isActive ? 'disabled' : ''} class="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-agri-primary font-mono text-center" min="1">
+                  <span class="text-[10px] text-agri-textSecondary">menit</span>
                 </div>
 
                 <div class="flex gap-2">
@@ -479,6 +525,9 @@
         return;
       }
       if (checked) {
+        const timerInput = document.getElementById(`timer-${id}`);
+        const minutes = timerInput ? parseFloat(timerInput.value) : 0;
+
         db.ref('/tanaman_list').once('value').then((snapshot) => {
           const plants = snapshot.val() || {};
           const updates = {};
@@ -493,10 +542,26 @@
             updates[`/devices/${deviceId}/target_tanaman_id`] = id;
           }
           return db.ref().update(updates);
+        }).then(() => {
+          if (minutes > 0) {
+            activeTimers[id] = {
+              endTime: Date.now() + (minutes * 60 * 1000),
+              deviceId: deviceId
+            };
+            const timerInputEl = document.getElementById(`timer-${id}`);
+            if (timerInputEl) timerInputEl.disabled = true;
+          }
         }).catch(err => {
           alert("Gagal mengaktifkan sensor: " + err.message);
         });
       } else {
+        if (activeTimers[id]) {
+          delete activeTimers[id];
+        }
+        const timerInputEl = document.getElementById(`timer-${id}`);
+        if (timerInputEl) {
+          timerInputEl.disabled = false;
+        }
         const updates = {};
         updates[`/tanaman_list/${id}/status_sensor_aktif`] = 0;
         if (deviceId) {
