@@ -6,3 +6,6 @@ __pycache__/
 # Kredensial rahasia - jangan di-push ke GitHub
 include/secrets.h
 
+# Output Dataset
+tools/dataset_output/
+*.csv
