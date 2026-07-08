@@ -117,16 +117,34 @@ def convert_json_to_csv():
         if not rows_to_write:
             continue
 
-        # Tulis ke file terpisah
-        csv_filename = os.path.join(output_dir, f"dataset_{tanaman_id}.csv")
+        # Hitung batas 80% untuk train, 20% untuk test
+        batas = int(len(rows_to_write) * 0.80)
+        
+        # Potong data
+        data_train = rows_to_write[:batas]
+        data_test = rows_to_write[batas:]
+
+        # Tulis ke file Train terpisah
+        csv_train_filename = os.path.join(output_dir, f"dataset_{tanaman_id}_train.csv")
         try:
-            with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
+            with open(csv_train_filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-                writer.writerows(rows_to_write)
-            print(f"[SUCCESS] Spesimen '{tanaman_id}' -> {len(rows_to_write)} baris ke '{csv_filename}'")
+                writer.writerows(data_train)
+            print(f"[SUCCESS] Spesimen '{tanaman_id}' -> {len(data_train)} baris ke '{csv_train_filename}' (TRAIN)")
         except Exception as e:
-            print(f"[ERROR] Gagal menulis dataset tanaman '{tanaman_id}': {e}")
+            print(f"[ERROR] Gagal menulis dataset train tanaman '{tanaman_id}': {e}")
+
+        # Tulis ke file Test terpisah
+        csv_test_filename = os.path.join(output_dir, f"dataset_{tanaman_id}_test.csv")
+        try:
+            with open(csv_test_filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerows(data_test)
+            print(f"[SUCCESS] Spesimen '{tanaman_id}' -> {len(data_test)} baris ke '{csv_test_filename}' (TEST)")
+        except Exception as e:
+            print(f"[ERROR] Gagal menulis dataset test tanaman '{tanaman_id}': {e}")
 
 if __name__ == "__main__":
     convert_json_to_csv()
