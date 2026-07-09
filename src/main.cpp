@@ -8,6 +8,7 @@
 #include <time.h>
 #include <math.h>
 #include "secrets.h"
+#include <bme688-tanaman_inferencing.h>
 
 // Inisialisasi Objek Sensor dan Firebase
 Adafruit_BME680 bme;
@@ -21,6 +22,95 @@ bool isSensorInitialized = false;         // Flag inisialisasi sensor
 String targetTanamanID = "";              // ID Tanaman target yang didapat dinamis dari Firebase
 float benchmarkGas = 100000.0;            // Default benchmark gas
 bool hasFetchedBenchmark = false;         // Flag to fetch benchmark only once per plant ID
+
+void ei_printf(const char *format, ...) {
+  static char print_buf[1024] = { 0 };
+  va_list args;
+  va_start(args, format);
+  int r = vsnprintf(print_buf, sizeof(print_buf), format, args);
+  va_end(args);
+  if (r > 0) {
+    Serial.write(print_buf);
+  }
+}
+
+// Buffer untuk menampung data inferencing (15 float = 3 frame x 5 axis)
+static float ei_features_buffer[EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE];
+
+// Callback function yang diminta oleh Edge Impulse SDK
+int raw_feature_get_data(size_t offset, size_t length, float *out_ptr) {
+  memcpy(out_ptr, ei_features_buffer + offset, length * sizeof(float));
+  return 0;
+}
+
+// Membaca 1 frame (5 nilai) dari BME688
+// Urutan HARUS sesuai fusion axes: temperatur, kelembapan, tekanan_udara, gas_resistance, abs_humidity
+bool readSensorFrame(float *frame_out) {
+  if (!bme.performReading()) {
+    return false;
+  }
+
+  float temp = bme.temperature;
+  float hum  = bme.humidity;
+  float pres = bme.pressure / 100.0;
+  float gas  = (bme.gas_resistance == 0) ? 0.0 : (float)bme.gas_resistance;
+  float absHum = (6.112 * exp((17.67 * temp) / (temp + 243.5)) * hum * 2.1674) / (273.15 + temp);
+
+  frame_out[0] = temp;
+  frame_out[1] = hum;
+  frame_out[2] = pres;
+  frame_out[3] = gas;
+  frame_out[4] = absHum;
+
+  return true;
+}
+
+// Menjalankan proses inferencing Edge Impulse
+// Mengembalikan true jika berhasil, dan mengisi label + confidence
+bool runInference(String &resultLabel, float &resultConfidence) {
+  int frameCount = EI_CLASSIFIER_RAW_SAMPLE_COUNT / EI_CLASSIFIER_RAW_SAMPLES_PER_FRAME; // = 3
+
+  for (int f = 0; f < frameCount; f++) {
+    int offset = f * EI_CLASSIFIER_RAW_SAMPLES_PER_FRAME;
+
+    if (!readSensorFrame(&ei_features_buffer[offset])) {
+      Serial.println("[AI] Gagal membaca sensor untuk frame inferencing.");
+      return false;
+    }
+
+    // Tunggu sesuai interval model, kecuali frame terakhir
+    if (f < frameCount - 1) {
+      delay(EI_CLASSIFIER_INTERVAL_MS);
+    }
+  }
+
+  // Buat signal dari buffer
+  signal_t signal;
+  signal.total_length = EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE;
+  signal.get_data = &raw_feature_get_data;
+
+  // Jalankan classifier
+  ei_impulse_result_t result = { 0 };
+  EI_IMPULSE_ERROR err = run_classifier(&signal, &result, false);
+
+  if (err != EI_IMPULSE_OK) {
+    Serial.printf("[AI] Error menjalankan classifier: %d\n", err);
+    return false;
+  }
+
+  // Cari label dengan confidence tertinggi
+  resultConfidence = 0;
+  for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
+    Serial.printf("[AI]   %s: %.4f\n", result.classification[i].label, result.classification[i].value);
+    if (result.classification[i].value > resultConfidence) {
+      resultConfidence = result.classification[i].value;
+      resultLabel = String(result.classification[i].label);
+    }
+  }
+
+  Serial.printf("[AI] Hasil: %s (%.2f%%)\n", resultLabel.c_str(), resultConfidence * 100);
+  return true;
+}
 
 // Fungsi untuk menginisialisasi sensor BME688
 bool initializeSensor()
@@ -43,7 +133,7 @@ bool initializeSensor()
 }
 
 // Fungsi untuk mengirim data sensor ke Firebase Realtime Database
-void sendDataToFirebase(float temp, float hum, float pres, float gas)
+void sendDataToFirebase(float temp, float hum, float pres, float gas, String aiLabel, float aiConfidence)
 {
   if (WiFi.status() != WL_CONNECTED)
   {
@@ -91,6 +181,8 @@ void sendDataToFirebase(float temp, float hum, float pres, float gas)
   json.set("gas_log", gasLog);
   json.set("gas_delta", gasDelta);
   json.set("abs_humidity", absHumidity);
+  json.set("ai_label", aiLabel);
+  json.set("ai_confidence", aiConfidence);
 
   // 1) Update data terkini (overwrite) dengan retry
   String pathTerakhir = String("/tanaman_list/") + targetTanamanID + "/data_terakhir";
@@ -271,6 +363,12 @@ void loop()
             // Lakukan pembacaan data sensor & kirim jika sudah diinisialisasi
             if (isSensorInitialized)
             {
+              // 1. Jalankan AI inferencing (membaca sensor 3x secara internal)
+              String aiLabel = "unknown";
+              float aiConfidence = 0.0;
+              bool aiSuccess = runInference(aiLabel, aiConfidence);
+
+              // 2. Baca sensor sekali lagi untuk data terkini
               if (bme.performReading())
               {
                 float temp = bme.temperature;
@@ -278,7 +376,10 @@ void loop()
                 float pres = bme.pressure / 100.0;
                 float gas = (bme.gas_resistance == 0) ? -1.0 : (float)bme.gas_resistance;
 
-                sendDataToFirebase(temp, hum, pres, gas);
+                // 3. Kirim ke Firebase (dengan hasil AI)
+                sendDataToFirebase(temp, hum, pres, gas,
+                                   aiSuccess ? aiLabel : "error",
+                                   aiSuccess ? aiConfidence : 0.0);
               }
               else
               {
