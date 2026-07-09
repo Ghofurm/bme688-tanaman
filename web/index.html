@@ -361,6 +361,8 @@
         const gasLogText = (latest.gas_log !== undefined && latest.gas_log !== -1) ? parseFloat(latest.gas_log).toFixed(2) : '--';
         const gasDeltaText = latest.gas_delta !== undefined ? `${parseFloat(latest.gas_delta).toLocaleString('id-ID')} Ω` : '--';
         const absHumText = latest.abs_humidity !== undefined ? `${parseFloat(latest.abs_humidity).toFixed(1)} g/m³` : '--';
+        const aiLabel = latest.ai_label || '--';
+        const aiConfidenceText = latest.ai_confidence !== undefined ? `${(parseFloat(latest.ai_confidence) * 100).toFixed(0)}%` : '--';
 
         let timeString = '--';
         if (latest.timestamp !== undefined) {
@@ -471,6 +473,13 @@
                 <div class="flex justify-between items-center py-0.5">
                   <span class="text-agri-textSecondary text-xs">Benchmark Gas:</span>
                   <span class="font-semibold text-agri-textPrimary font-mono text-xs">${benchmark.toLocaleString('id-ID')} Ω</span>
+                </div>
+                <div class="flex justify-between items-center py-1 border-t border-dashed border-gray-100 mt-2 pt-2">
+                  <span class="text-agri-textSecondary text-xs font-semibold">Prediksi AI:</span>
+                  <div class="text-right">
+                    <span class="px-2 py-0.5 text-xs font-bold rounded-full ${aiLabel === 'sehat' ? 'bg-emerald-100 text-emerald-800' : aiLabel === 'sakit' ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-800'}">${aiLabel.toUpperCase()}</span>
+                    <span class="block text-[10px] text-agri-textSecondary font-mono mt-0.5">Confidence: ${aiConfidenceText}</span>
+                  </div>
                 </div>
               </div>
             </div>
